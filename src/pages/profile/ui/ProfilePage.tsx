@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
 import { BellRing, CalendarDays, ChevronRight, CircleHelp, Droplets, Globe2, Info, MoonStar, Ruler, Scale, ShieldCheck, UserRound } from 'lucide-react'
 import { useHydrationStore } from '@/entities/hydration/model/store'
 import { GoalSheet } from '@/features/goal/ui/GoalSheet'
