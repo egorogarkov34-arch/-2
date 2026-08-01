@@ -14,7 +14,6 @@ export interface Profile {
   height: number
   weight: number
   activity: ActivityLevel
-  workoutMinutes: number
   reminders: boolean
   reminderInterval: string
   units: 'ml' | 'oz'
