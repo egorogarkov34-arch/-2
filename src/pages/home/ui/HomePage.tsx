@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
-import { Bell, ChevronRight, Droplets, History, PencilLine, Plus, Trash2 } from 'lucide-react'
+import { ChevronRight, Droplets, History, PencilLine, Plus, Trash2 } from 'lucide-react'
 import { useHydrationStore, selectTodayAmount } from '@/entities/hydration/model/store'
 import { BodyWater } from '@/entities/hydration/ui/BodyWater'
 import { ProgressRing } from '@/entities/hydration/ui/ProgressRing'
@@ -45,7 +45,7 @@ export default function HomePage() {
 
   return <motion.main ref={ref} className="page home-page" variants={container} initial="hidden" animate="show">
     <motion.div className="refresh-indicator" animate={{ y: Math.max(-46, pullDistance - 46), opacity: pullDistance ? 1 : 0 }}><Droplets size={16} className={isRefreshing ? 'is-refreshing' : ''}/><span>{isRefreshing ? t('refresh') : t('pullToRefresh')}</span></motion.div>
-    <motion.header className="home-header" variants={item}><div><p className="eyebrow">{t('today')}, {todayDate}</p><h1>{t('greeting')}, {profile.name} <span>✦</span></h1></div><button className="icon-button notification" aria-label={t('notifications')} onClick={haptic.tap}><Bell size={20}/><i/></button></motion.header>
+    <motion.header className="home-header" variants={item}><div><p className="eyebrow">{t('today')}, {todayDate}</p><h1>{t('greeting')}, {profile.name} <span>✦</span></h1></div></motion.header>
     <motion.section className="goal-overview" variants={item} aria-label={t('progress')}><div className="goal-copy"><p>{t('todayBalance')}</p><strong>{formatMl(today)} <small>ml</small></strong><span>{t('of')} {formatMl(goal)} ml</span></div><ProgressRing value={percentage} size={96} stroke={8}/></motion.section>
     <motion.section className="body-section" variants={item}><div className="body-metrics"><span>{t('remaining')}</span><strong>{remaining ? `${formatMl(remaining)} ml` : t('goalReached')}</strong></div><BodyWater percentage={percentage}/><button className="edit-goal" onClick={() => { haptic.tap(); setGoalOpen(true) }}><PencilLine size={14}/> {t('goal')} {formatMl(goal)} ml</button></motion.section>
     <motion.section className="quick-actions" variants={item}><motion.button className="add-water-button" onClick={() => { haptic.tap(); setSheetOpen(true) }} whileTap={{ scale: .98 }}><span className="add-icon"><Plus size={24}/></span><span><b>{t('addWater')}</b><small>{t('createEntry')}</small></span><Droplets size={21}/></motion.button><button className="history-button" onClick={() => setHistoryOpen(true)} aria-label={t('history')}><History size={20}/></button></motion.section>
