@@ -25,7 +25,7 @@ export function AddWaterSheet({ open, onClose, onAdd }: Props) {
       <motion.button className="sheet-scrim" aria-label={t('close')} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       <motion.section className="bottom-sheet" role="dialog" aria-modal="true" aria-label={t('addWater')} initial={{ y: '105%' }} animate={{ y: 0 }} exit={{ y: '105%' }} transition={{ type: 'spring', stiffness: 320, damping: 31 }}>
         <div className="sheet-handle" /><div className="sheet-heading"><div><p className="eyebrow">{t('quickEntry')}</p><h2>{t('addWater')}</h2></div><button className="icon-button" onClick={onClose} aria-label={t('close')}><X size={20}/></button></div>
-        <div className="amount-grid">{amounts.map((amount) => <motion.button key={amount} className={`amount-option ${success === amount ? 'is-success' : ''}`} whileTap={{ scale: .96 }} onClick={() => add(amount)}>{success === amount ? <Check size={19}/> : <Plus size={16}/>}<span>{amount} ml</span></motion.button>)}</div>
+        <div className="amount-grid">{amounts.map((amount) => <motion.button key={amount} className={`amount-option ${success === amount ? 'is-success' : ''}`} whileTap={{ scale: .96 }} onClick={() => add(amount)}>{success === amount ? <Check size={19}/> : <Plus size={16}/>}<span>{amount} {t('millilitres')}</span></motion.button>)}</div>
       </motion.section>
     </>}
   </AnimatePresence>
