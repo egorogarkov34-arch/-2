@@ -4,7 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ErrorBoundary } from '@/shared/ui/ErrorBoundary'
 import { BottomNavigation } from '@/widgets/bottom-navigation/ui/BottomNavigation'
 import { useHydrationStore } from '@/entities/hydration/model/store'
-import { initializeTelegram, telegram } from '@/shared/lib/telegram'
+import type { StoredUserState } from '@/entities/hydration/model/types'
+import { initializeTelegram, loadFromCloud, telegram } from '@/shared/lib/telegram'
 
 const HomePage = lazy(() => import('@/pages/home/ui/HomePage'))
 const StatisticsPage = lazy(() => import('@/pages/statistics/ui/StatisticsPage'))
@@ -17,16 +18,15 @@ export function App() {
   const activeTab = useHydrationStore((state) => state.activeTab)
   const theme = useHydrationStore((state) => state.profile.theme)
   const language = useHydrationStore((state) => state.profile.language)
-  const updateProfile = useHydrationStore((state) => state.updateProfile)
+  const restoreUserState = useHydrationStore((state) => state.restoreUserState)
   const [ready, setReady] = useState(false)
   useEffect(() => {
     initializeTelegram()
-    const user = telegram()?.initDataUnsafe.user
-    const name = user?.username ? `@${user.username}` : user?.first_name
-    if (name) updateProfile({ name })
+    let active = true
+    void loadFromCloud<StoredUserState>('aquora:user-state').then((stored) => { if (active && stored) restoreUserState(stored) })
     const frame = requestAnimationFrame(() => setReady(true))
-    return () => cancelAnimationFrame(frame)
-  }, [updateProfile])
+    return () => { active = false; cancelAnimationFrame(frame) }
+  }, [restoreUserState])
   useEffect(() => { if (activeTab !== 'home') telegram()?.MainButton?.hide() }, [activeTab])
   useEffect(() => { document.body.dataset.theme = theme; document.documentElement.lang = language }, [language, theme])
   const page = activeTab === 'home' ? <HomePage/> : activeTab === 'stats' ? <StatisticsPage/> : <ProfilePage/>
