@@ -6,6 +6,7 @@ import { BottomNavigation } from '@/widgets/bottom-navigation/ui/BottomNavigatio
 import { useHydrationStore } from '@/entities/hydration/model/store'
 import type { StoredUserState } from '@/entities/hydration/model/types'
 import { initializeTelegram, loadFromCloud, syncToCloud, telegram } from '@/shared/lib/telegram'
+import { syncProfileToBot } from '@/shared/lib/profile-sync'
 
 const HomePage = lazy(() => import('@/pages/home/ui/HomePage'))
 const StatisticsPage = lazy(() => import('@/pages/statistics/ui/StatisticsPage'))
@@ -20,6 +21,7 @@ export function App() {
   const language = useHydrationStore((state) => state.profile.language)
   const restoreUserState = useHydrationStore((state) => state.restoreUserState)
   const [ready, setReady] = useState(false)
+  const [profileRestored, setProfileRestored] = useState(false)
   useEffect(() => {
     initializeTelegram()
     let active = true
@@ -28,10 +30,21 @@ export function App() {
       if (stored) { restoreUserState(stored); return }
       const current = useHydrationStore.getState()
       syncToCloud('aquora:user-state', { profile: current.profile, goal: current.goal, goalMode: current.goalMode } satisfies StoredUserState)
-    })
+    }).finally(() => { if (active) setProfileRestored(true) })
     const frame = requestAnimationFrame(() => setReady(true))
     return () => { active = false; cancelAnimationFrame(frame) }
   }, [restoreUserState])
+  useEffect(() => {
+    if (!profileRestored) return
+    const sync = () => {
+      const state = useHydrationStore.getState()
+      syncProfileToBot(state.profile, state.goal)
+    }
+    sync()
+    return useHydrationStore.subscribe((state, previousState) => {
+      if (state.profile !== previousState.profile || state.goal !== previousState.goal) sync()
+    })
+  }, [profileRestored])
   useEffect(() => { telegram()?.MainButton?.hide() }, [activeTab])
   useEffect(() => { document.body.dataset.theme = theme; document.documentElement.lang = language }, [language, theme])
   const page = activeTab === 'home' ? <HomePage/> : activeTab === 'stats' ? <StatisticsPage/> : <ProfilePage/>
