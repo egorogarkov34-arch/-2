@@ -28,6 +28,7 @@ export const useHydrationStore = create<HydrationState>()(
     (set) => ({
       activeTab: 'home',
       goal: calculateWaterGoal(initialProfile),
+      goalMode: 'auto',
       intake: [],
       profile: initialProfile,
       setActiveTab: (activeTab) => set({ activeTab }),
@@ -43,7 +44,8 @@ export const useHydrationStore = create<HydrationState>()(
           syncToCloud('aquora:intake', intake)
           return { intake }
         }),
-      setGoal: (goal) => set({ goal }),
+      setGoal: (goal) => set({ goal, goalMode: 'custom' }),
+      setAutomaticGoal: (goal) => set((state) => state.goalMode === 'auto' ? { goal } : {}),
       updateProfile: (profile) => set((state) => ({ profile: { ...state.profile, ...profile } }))
     }),
     {
