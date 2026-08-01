@@ -97,4 +97,4 @@ function normalizeReminderInterval(value: unknown): ReminderInterval {
 }
 
 export const selectTodayAmount = (state: HydrationState) =>
-  state.intake.filter((item) => item.createdAt.startsWith(todayKey())).reduce((sum, item) => sum + item.amount, 0)
+  state.intake.filter((item) => todayKey(new Date(item.createdAt)) === todayKey()).reduce((sum, item) => sum + item.amount, 0)
