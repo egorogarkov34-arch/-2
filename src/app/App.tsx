@@ -5,7 +5,7 @@ import { ErrorBoundary } from '@/shared/ui/ErrorBoundary'
 import { BottomNavigation } from '@/widgets/bottom-navigation/ui/BottomNavigation'
 import { useHydrationStore } from '@/entities/hydration/model/store'
 import type { StoredUserState } from '@/entities/hydration/model/types'
-import { initializeTelegram, loadFromCloud, telegram } from '@/shared/lib/telegram'
+import { initializeTelegram, loadFromCloud, syncToCloud, telegram } from '@/shared/lib/telegram'
 
 const HomePage = lazy(() => import('@/pages/home/ui/HomePage'))
 const StatisticsPage = lazy(() => import('@/pages/statistics/ui/StatisticsPage'))
@@ -23,7 +23,12 @@ export function App() {
   useEffect(() => {
     initializeTelegram()
     let active = true
-    void loadFromCloud<StoredUserState>('aquora:user-state').then((stored) => { if (active && stored) restoreUserState(stored) })
+    void loadFromCloud<StoredUserState>('aquora:user-state').then((stored) => {
+      if (!active) return
+      if (stored) { restoreUserState(stored); return }
+      const current = useHydrationStore.getState()
+      syncToCloud('aquora:user-state', { profile: current.profile, goal: current.goal, goalMode: current.goalMode } satisfies StoredUserState)
+    })
     const frame = requestAnimationFrame(() => setReady(true))
     return () => { active = false; cancelAnimationFrame(frame) }
   }, [restoreUserState])
