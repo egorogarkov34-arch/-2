@@ -38,12 +38,22 @@ export function App() {
     if (!profileRestored) return
     const sync = () => {
       const state = useHydrationStore.getState()
-      syncProfileToBot(state.profile, state.goal)
+      void syncProfileToBot(state.profile, state.goal)
     }
     sync()
-    return useHydrationStore.subscribe((state, previousState) => {
+    const unsubscribe = useHydrationStore.subscribe((state, previousState) => {
       if (state.profile !== previousState.profile || state.goal !== previousState.goal) sync()
     })
+
+    window.addEventListener('focus', sync)
+    const syncWhenVisible = () => { if (document.visibilityState === 'visible') sync() }
+    document.addEventListener('visibilitychange', syncWhenVisible)
+
+    return () => {
+      unsubscribe()
+      window.removeEventListener('focus', sync)
+      document.removeEventListener('visibilitychange', syncWhenVisible)
+    }
   }, [profileRestored])
   useEffect(() => { telegram()?.MainButton?.hide() }, [activeTab])
   useEffect(() => { document.body.dataset.theme = theme; document.documentElement.lang = language }, [language, theme])
