@@ -3,5 +3,11 @@
   "name": "aquora-water-bot",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-01",
-  "workers_dev": true
+  "workers_dev": true,
+  "kv_namespaces": [
+    {
+      "binding": "PROFILES",
+      "id": "bb9b7b7ea03b44e38d76df240b0e385f"
+    }
+  ]
 }
