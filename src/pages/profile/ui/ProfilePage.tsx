@@ -1,21 +1,22 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BellRing, CalendarDays, ChevronRight, CircleHelp, Droplets, Globe2, Info, MoonStar, Ruler, Scale, ShieldCheck, UserRound } from 'lucide-react'
 import { useHydrationStore } from '@/entities/hydration/model/store'
-import { GoalSheet } from '@/features/goal/ui/GoalSheet'
 import { haptic } from '@/shared/lib/telegram'
 import { useGoalRecommendation } from '@/entities/hydration/model/useGoalRecommendation'
 import { EditProfileSheet } from '@/features/profile/ui/EditProfileSheet'
 import { useTranslation } from '@/shared/lib/i18n'
+import { calculateWaterGoal } from '@/entities/hydration/model/calculateGoal'
 
 type RowId = 'reminders' | 'frequency' | 'theme' | 'language'
 interface SettingRow { id?: RowId; icon: typeof UserRound; label: string; value?: string; action?: 'toggle' | 'chevron' }
 
 export default function ProfilePage() {
-  const { profile, updateProfile, goal, setGoal } = useHydrationStore()
+  const { profile, updateProfile, setGoal } = useHydrationStore()
   const { t } = useTranslation()
   const recommendation = useGoalRecommendation(profile)
-  const [goalOpen, setGoalOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const recommendedGoal = recommendation.data?.value ?? calculateWaterGoal(profile)
+  useEffect(() => { setGoal(recommendedGoal) }, [recommendedGoal, setGoal])
   const activityName = profile.activity === 'moderate' ? t('moderate') : profile.activity === 'high' ? t('high') : t('low')
   const genderName = profile.gender === 'male' ? t('male') : profile.gender === 'female' ? t('female') : t('other')
   const toggleTheme = () => updateProfile({ theme: profile.theme === 'dark' ? 'light' : 'dark' })
@@ -33,12 +34,12 @@ export default function ProfilePage() {
   const preferenceAction = (id: RowId | undefined) => id === 'reminders' ? () => updateProfile({ reminders: !profile.reminders }) : id === 'theme' ? toggleTheme : undefined
   const preferenceClick = (id: RowId | undefined) => id === 'language' ? toggleLanguage : haptic.tap
   return <main className="page profile-page"><header className="page-header"><div><p className="eyebrow">{t('personalSpace')}</p><h1>{t('profile')}</h1></div><div className="avatar">{profile.name.replace('@', '').slice(0, 1).toUpperCase()}</div></header>
-    <section className="profile-summary"><div className="profile-orb"><Droplets size={25}/></div><div><span>{t('personalPlan')}</span><strong>{goal / 1000} L {t('perDay')}</strong><p>{t('recommendation')}: {recommendation.data?.value ?? goal} ml{recommendation.data?.temperatureC ? ` · ${recommendation.data.temperatureC}°C` : ''}</p></div><button onClick={() => setGoalOpen(true)} aria-label={t('dailyGoal')}><ChevronRight size={19}/></button></section>
+    <section className="profile-summary"><div className="profile-orb"><Droplets size={25}/></div><div><span>{t('personalPlan')}</span><strong>{recommendedGoal / 1000} L {t('perDay')}</strong><p>{t('personalPlanHint')}{recommendation.data?.temperatureC ? ` · ${recommendation.data.temperatureC}°C` : ''}</p></div><button onClick={() => setProfileOpen(true)} aria-label={t('editProfile')}><ChevronRight size={19}/></button></section>
     <SettingsGroup title={t('personalData')} rows={personal} onClick={() => setProfileOpen(true)}/>
-    <section className="settings-section"><h2>{t('goalAndActivity')}</h2><div className="settings-card"><Setting icon={Droplets} label={t('dailyGoal')} value={`${goal} ml`} onClick={() => setGoalOpen(true)}/><Setting icon={CircleHelp} label={t('activity')} value={activityName} onClick={() => setProfileOpen(true)}/></div></section>
+    <section className="settings-section"><h2>{t('goalAndActivity')}</h2><div className="settings-card"><Setting icon={Droplets} label={t('dailyGoal')} value={`${recommendedGoal} ml`} onClick={() => setProfileOpen(true)}/><Setting icon={CircleHelp} label={t('activity')} value={activityName} onClick={() => setProfileOpen(true)}/><Setting icon={CalendarDays} label={t('workout')} value={`${profile.workoutMinutes} min`} onClick={() => setProfileOpen(true)}/></div></section>
     <section className="settings-section"><h2>{t('settings')}</h2><div className="settings-card">{preferences.map((row) => <Setting key={row.id} {...row} toggleValue={row.id === 'reminders' ? profile.reminders : profile.theme === 'dark'} onToggle={preferenceAction(row.id)} onClick={preferenceClick(row.id)}/>)}</div></section>
     <section className="settings-section"><div className="settings-card"><Setting icon={ShieldCheck} label={t('privacy')} onClick={haptic.tap}/><Setting icon={CircleHelp} label={t('support')} onClick={haptic.tap}/><Setting icon={Info} label={t('about')} onClick={haptic.tap}/></div></section>
-    <p className="app-version">Aquora · {t('version')} 1.0.0</p><GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><EditProfileSheet open={profileOpen} profile={profile} onClose={() => setProfileOpen(false)} onSave={updateProfile}/>
+    <p className="app-version">Aquora · {t('version')} 1.0.0</p><EditProfileSheet open={profileOpen} profile={profile} onClose={() => setProfileOpen(false)} onSave={updateProfile}/>
   </main>
 }
 
