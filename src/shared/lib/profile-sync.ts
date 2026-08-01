@@ -5,7 +5,7 @@ const profileEndpoint = 'https://aquora-water-bot.egorogarkov34.workers.dev/prof
 
 const wait = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
 
-export async function syncProfileToBot(profile: Profile, goal: number, attempt = 0): Promise<boolean> {
+export async function syncProfileToBot(profile: Profile, goal: number, todayAmount: number, todayDate: string, timezoneOffsetMinutes: number, attempt = 0): Promise<boolean> {
   const initData = getTelegramInitData()
   if (!initData) return false
 
@@ -25,8 +25,13 @@ export async function syncProfileToBot(profile: Profile, goal: number, attempt =
           weight: profile.weight,
           activity: profile.activity,
           language: profile.language,
+          reminders: profile.reminders,
+          reminderInterval: profile.reminderInterval,
         },
         goal,
+        todayAmount,
+        todayDate,
+        timezoneOffsetMinutes,
       }),
     })
 
@@ -36,5 +41,5 @@ export async function syncProfileToBot(profile: Profile, goal: number, attempt =
   }
 
   await wait(900 * (attempt + 1))
-  return syncProfileToBot(profile, goal, attempt + 1)
+  return syncProfileToBot(profile, goal, todayAmount, todayDate, timezoneOffsetMinutes, attempt + 1)
 }
