@@ -18,6 +18,7 @@ export interface Profile {
   reminderInterval: string
   units: 'ml' | 'oz'
   language: 'ru' | 'en'
+  theme: 'dark' | 'light'
 }
 
 export interface HydrationState {
