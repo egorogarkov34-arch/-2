@@ -134,9 +134,8 @@ export default function StatisticsPage() {
   const max = Math.max(0, ...data.map((entry) => entry.amount))
   const axisUpperBound = max === 0 ? 1000 : Math.max(500, Math.ceil(max / 500) * 500)
   const axisTicks = [0, 1, 2, 3].map((step) => Math.round((axisUpperBound * step) / 3))
-  const complete = activeDates.length
-    ? Math.round((activeDates.filter((date) => (amountsByDay[todayKey(date)] ?? 0) >= goal).length / activeDates.length) * 100)
-    : 0
+  const periodGoal = goal * activeDates.length
+  const complete = periodGoal > 0 ? Math.round((total / periodGoal) * 100) : 0
   const record = Math.max(0, ...Object.values(amountsByDay))
   const cards = [
     { label: t('streak'), value: total ? `1 ${t('day')}` : `0 ${t('days')}`, icon: Flame, tone: 'orange' },
