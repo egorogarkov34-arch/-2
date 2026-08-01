@@ -116,3 +116,20 @@ body[data-theme="light"] .frequency-options button { background: #f2f5f8; border
 body[data-theme="light"] .frequency-options button.selected { background: #dcedff; border-color: #6eaff0; }
 body[data-theme="light"] .history-entry { border-color: #e3e8ed; }
 body[data-theme="light"] .history-entry strong, body[data-theme="light"] .history-empty strong { color: #17191c; }
+
+/* Refined controls for quick logging, profile fields, and safe bulk deletion. */
+.amount-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
+.history-heading-actions { display: flex; align-items: center; gap: 8px; }
+.history-clear { border: 0; background: transparent; color: #ff9a9a; font-size: 12px; font-weight: 650; padding: 8px 4px; }
+.history-confirm { padding: 16px; border: 1px solid #ff939326; border-radius: 17px; background: #311b1b38; }
+.history-confirm strong { display: block; font-size: 16px; }
+.history-confirm p { margin: 6px 0 15px; color: #9ea6af; font-size: 12px; line-height: 1.4; }
+.history-confirm > div { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.history-confirm button { min-height: 43px; border: 1px solid #FFFFFF12; border-radius: 13px; color: #d8e0e7; background: #25282d; font-size: 13px; font-weight: 650; }
+.history-confirm button.destructive { color: #fff1f1; background: #b53c43; border-color: #e97076; }
+.single-field-form { display: grid; gap: 14px; }
+.single-field-form .primary-action { margin-top: 3px; }
+body[data-theme="light"] .history-confirm { background: #fff2f2; border-color: #f2caca; }
+body[data-theme="light"] .history-confirm button { color: #26313a; background: #eff2f5; border-color: #dce2e8; }
+@media (min-width: 600px) { .amount-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 360px) { .amount-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
