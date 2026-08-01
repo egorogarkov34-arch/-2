@@ -1,8 +1,8 @@
-export const formatMl = (value: number) => new Intl.NumberFormat('ru-RU').format(value)
+export const formatMl = (value: number, language: 'ru' | 'en' = 'ru') => new Intl.NumberFormat(language === 'en' ? 'en-US' : 'ru-RU').format(value)
 
-export const formatLitres = (value: number) => {
+export const formatLitres = (value: number, language: 'ru' | 'en' = 'ru') => {
   const litres = value / 1000
-  return `${litres.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} л`
+  return `${litres.toLocaleString(language === 'en' ? 'en-US' : 'ru-RU', { maximumFractionDigits: 1 })} ${language === 'en' ? 'L' : 'Л'}`
 }
 
 export const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
