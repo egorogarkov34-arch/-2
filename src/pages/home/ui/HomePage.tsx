@@ -7,7 +7,7 @@ import { ProgressRing } from '@/entities/hydration/ui/ProgressRing'
 import { AddWaterSheet } from '@/features/log-water/ui/AddWaterSheet'
 import { GoalSheet } from '@/features/goal/ui/GoalSheet'
 import { HistorySheet } from '@/features/history/ui/HistorySheet'
-import { clamp, formatMl } from '@/shared/lib/format'
+import { clamp, formatMl, todayKey } from '@/shared/lib/format'
 import { haptic } from '@/shared/lib/telegram'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { useTranslation } from '@/shared/lib/i18n'
@@ -30,7 +30,7 @@ export default function HomePage() {
   const remaining = Math.max(goal - today, 0)
   const locale = language === 'en' ? 'en-US' : 'ru-RU'
   const todayDate = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(new Date())
-  const recent = useMemo(() => intake.filter((entry) => entry.createdAt.startsWith(new Date().toISOString().slice(0, 10))).slice(-3).reverse(), [intake])
+  const recent = useMemo(() => intake.filter((entry) => todayKey(new Date(entry.createdAt)) === todayKey()).slice(-3).reverse(), [intake])
   const add = (amount: number) => { addWater(amount); setToast(amount); window.setTimeout(() => setToast(null), 2500) }
   const submitCustomAmount = () => {
     const amount = Number(customAmount)
