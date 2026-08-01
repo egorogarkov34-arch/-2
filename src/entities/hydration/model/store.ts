@@ -1,15 +1,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { HydrationState } from './types'
-import { syncToCloud } from '@/shared/lib/telegram'
+import { syncToCloud, telegram } from '@/shared/lib/telegram'
 import { calculateWaterGoal } from './calculateGoal'
 import { todayKey } from '@/shared/lib/format'
 
-const telegramUserId = window.Telegram?.WebApp?.initDataUnsafe.user?.id ?? 'guest'
+const telegramUser = telegram()?.initDataUnsafe.user
+const telegramUserId = telegramUser?.id ?? 'guest'
 const storageKey = `aquora-hydration-v2:${telegramUserId}`
 
 const initialProfile = {
-  name: 'Егор',
+  name: telegramUser?.username ? `@${telegramUser.username}` : telegramUser?.first_name ?? 'Пользователь',
   age: 28,
   gender: 'male' as const,
   height: 180,
@@ -33,6 +34,12 @@ export const useHydrationStore = create<HydrationState>()(
       addWater: (amount) =>
         set((state) => {
           const intake = [...state.intake, { id: crypto.randomUUID(), amount, createdAt: new Date().toISOString() }]
+          syncToCloud('aquora:intake', intake)
+          return { intake }
+        }),
+      removeWater: (id) =>
+        set((state) => {
+          const intake = state.intake.filter((entry) => entry.id !== id)
           syncToCloud('aquora:intake', intake)
           return { intake }
         }),
