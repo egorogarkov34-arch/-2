@@ -22,7 +22,7 @@ export default function HomePage() {
   const [toast, setToast] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('250')
   const [refreshVersion, setRefreshVersion] = useState(0)
-  const { goal, addWater, removeWater, clearWater, setGoal, profile, intake } = useHydrationStore()
+  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake } = useHydrationStore()
   const { language, t } = useTranslation()
   const millilitres = t('millilitres')
   const today = useHydrationStore(selectTodayAmount)
@@ -64,7 +64,7 @@ export default function HomePage() {
       </div>
     </motion.form>
     <motion.section className="recent-card" variants={item} key={refreshVersion}><div className="section-row"><h2>{t('recentEntries')}</h2><button onClick={() => setHistoryOpen(true)}>{t('all')} <ChevronRight size={15}/></button></div>{recent.length ? <div className="recent-list">{recent.map((entry) => <div key={entry.id}><span className="drop-dot"><Droplets size={15}/></span><p>{formatMl(entry.amount, language)} {millilitres} <small>{new Date(entry.createdAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</small></p><button className="mini-delete" onClick={() => remove(entry.id)} aria-label={`${t('delete')} ${formatMl(entry.amount, language)} ${millilitres}`}><Trash2 size={15}/></button></div>)}</div> : <p className="empty-state">{t('firstEntry')}</p>}</motion.section>
-    <AddWaterSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onAdd={add}/><GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><HistorySheet open={historyOpen} entries={intake} onClose={() => setHistoryOpen(false)} onDelete={remove} onClearAll={clearWater}/>
+    <AddWaterSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onAdd={add}/><GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><HistorySheet open={historyOpen} entries={intake} onClose={() => setHistoryOpen(false)} onDelete={remove} onClearAll={clearTodayWater}/>
     {toast !== null && <motion.div className="success-toast" initial={{ opacity: 0, y: 16, scale: .95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0 }}><span><Droplets size={17}/></span> +{toast} {millilitres} {t('added')}</motion.div>}
   </motion.main>
 }
