@@ -15,7 +15,7 @@ export default function StatisticsPage() {
   const intake = useHydrationStore((state) => state.intake)
   const { language, t } = useTranslation()
   const locale = language === 'en' ? 'en-US' : 'ru-RU'
-  const formatVolume = (value: number) => `${(value / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} L`
+  const formatVolume = (value: number) => `${(value / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} ${t('litres')}`
   const data = useMemo(() => Array.from({ length: 7 }, (_, index) => {
     const date = new Date()
     date.setDate(date.getDate() - (6 - index))
