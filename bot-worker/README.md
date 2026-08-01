@@ -16,6 +16,8 @@ Add these variables in the Worker settings. Do not put their values in GitHub.
 - `/open` — Mini App button.
 - `/help` — command list.
 
+The `/profile` command shows the user's saved hydration profile.
+
 ## Register the webhook
 
 After Cloudflare deploys the Worker, set the Telegram webhook URL to:
