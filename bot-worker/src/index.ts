@@ -66,8 +66,6 @@ interface ProfileSyncPayload {
 const encoder = new TextEncoder()
 const WEB_APP_MAX_AGE_SECONDS = 86_400
 const DEFAULT_AQUA_APP_URL = 'https://aquora-water.onrender.com'
-const REMINDER_START_HOUR = 9
-const REMINDER_END_HOUR = 22
 
 const welcomeText = `💧 <b>Добро пожаловать в Aquora Water!</b>
 
@@ -289,6 +287,27 @@ function formatAmount(amount: number, language: Language) {
   return new Intl.NumberFormat(language === 'en' ? 'en-US' : 'ru-RU').format(Math.round(amount))
 }
 
+function normalizeStoredProfile(profile: StoredProfile): StoredProfile {
+  const goal = numberInRange(profile.goal, 500, 10_000) ?? 2_000
+  const todayAmount = numberInRange(profile.todayAmount, 0, 100_000) ?? 0
+  const timezoneOffsetMinutes = numberInRange(profile.timezoneOffsetMinutes, -840, 840) ?? 0
+  const todayDate = /^\d{4}-\d{2}-\d{2}$/.test(profile.todayDate) ? profile.todayDate : ''
+
+  return {
+    ...profile,
+    goal: Math.round(goal),
+    language: profile.language === 'en' ? 'en' : 'ru',
+    // In older Mini App versions this field was not sent to the bot.
+    // The visible switch has always been enabled by default, so a missing
+    // value must mean “enabled”, while an explicit false remains respected.
+    reminders: profile.reminders !== false,
+    reminderInterval: parseInterval(profile.reminderInterval),
+    todayAmount: Math.round(todayAmount),
+    todayDate,
+    timezoneOffsetMinutes: Math.round(timezoneOffsetMinutes),
+  }
+}
+
 function reminderText(profile: StoredProfile, todayAmount: number, userId: number, now: Date) {
   const remaining = Math.max(profile.goal - todayAmount, 0)
   const percent = Math.min(100, Math.round((todayAmount / profile.goal) * 100))
@@ -322,24 +341,22 @@ async function getChatId(env: Env, userId: number) {
 }
 
 async function processReminder(env: Env, userId: number, profile: StoredProfile) {
-  // Older profile records do not contain this consent flag, so they must never be opted in silently.
-  if (profile.reminders !== true) return
+  const normalizedProfile = normalizeStoredProfile(profile)
+  if (!normalizedProfile.reminders) return
 
-  const now = localTime(profile.timezoneOffsetMinutes)
-  const hour = now.getUTCHours()
-  if (hour < REMINDER_START_HOUR || hour >= REMINDER_END_HOUR) return
+  const now = localTime(normalizedProfile.timezoneOffsetMinutes)
 
   const todayDate = localDateKey(now)
-  const todayAmount = profile.todayDate === todayDate ? profile.todayAmount : 0
-  if (todayAmount >= profile.goal) return
+  const todayAmount = normalizedProfile.todayDate === todayDate ? normalizedProfile.todayAmount : 0
+  if (todayAmount >= normalizedProfile.goal) return
 
-  const minutes = hour * 60 + now.getUTCMinutes()
-  const slot = `${todayDate}:${Math.floor(minutes / intervalMinutes(profile.reminderInterval))}`
-  if (profile.lastReminderSlot === slot) return
+  const minutes = now.getUTCHours() * 60 + now.getUTCMinutes()
+  const slot = `${todayDate}:${Math.floor(minutes / intervalMinutes(normalizedProfile.reminderInterval))}`
+  if (normalizedProfile.lastReminderSlot === slot) return
 
   const chatId = await getChatId(env, userId)
-  const sent = await sendMessage(env, chatId, reminderText(profile, todayAmount, userId, now))
-  if (sent) await env.PROFILES.put(profileKey(userId), JSON.stringify({ ...profile, lastReminderSlot: slot }))
+  const sent = await sendMessage(env, chatId, reminderText(normalizedProfile, todayAmount, userId, now))
+  if (sent) await env.PROFILES.put(profileKey(userId), JSON.stringify({ ...normalizedProfile, lastReminderSlot: slot }))
 }
 
 async function sendScheduledReminders(env: Env) {
