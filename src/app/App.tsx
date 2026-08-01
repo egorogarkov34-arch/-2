@@ -46,14 +46,19 @@ export function App() {
       if (state.profile !== previousState.profile || state.goal !== previousState.goal || state.intake !== previousState.intake) sync()
     })
 
+    const syncInterval = window.setInterval(sync, 3 * 60_000)
     window.addEventListener('focus', sync)
-    const syncWhenVisible = () => { if (document.visibilityState === 'visible') sync() }
-    document.addEventListener('visibilitychange', syncWhenVisible)
+    window.addEventListener('online', sync)
+    // keepalive in the request lets the current goal reach the bot even when
+    // the user immediately closes the Mini App after changing it.
+    document.addEventListener('visibilitychange', sync)
 
     return () => {
       unsubscribe()
+      window.clearInterval(syncInterval)
       window.removeEventListener('focus', sync)
-      document.removeEventListener('visibilitychange', syncWhenVisible)
+      window.removeEventListener('online', sync)
+      document.removeEventListener('visibilitychange', sync)
     }
   }, [profileRestored])
   useEffect(() => { telegram()?.MainButton?.hide() }, [activeTab])
