@@ -105,7 +105,6 @@ export default function StatisticsPage() {
   const [period, setPeriod] = useState<Period>('week')
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth())
-  const goal = useHydrationStore((state) => state.goal)
   const intake = useHydrationStore((state) => state.intake)
   const { language, t } = useTranslation()
   const locale = language === 'en' ? 'en-US' : 'ru-RU'
@@ -134,8 +133,6 @@ export default function StatisticsPage() {
   const max = Math.max(0, ...data.map((entry) => entry.amount))
   const axisUpperBound = max === 0 ? 1000 : Math.max(500, Math.ceil(max / 500) * 500)
   const axisTicks = [0, 1, 2, 3].map((step) => Math.round((axisUpperBound * step) / 3))
-  const periodGoal = goal * activeDates.length
-  const complete = periodGoal > 0 ? Math.round((total / periodGoal) * 100) : 0
   const record = Math.max(0, ...Object.values(amountsByDay))
   const cards = [
     { label: t('streak'), value: total ? `1 ${t('day')}` : `0 ${t('days')}`, icon: Flame, tone: 'orange' },
@@ -199,7 +196,6 @@ export default function StatisticsPage() {
             </div>
             <h2>{formatVolume(average)} <small>{t('average')}</small></h2>
           </div>
-          <span className="goal-chip">{complete}% {t('goalPercent')}</span>
         </div>
         <div className="chart-holder bar-holder">
           <ResponsiveContainer width="100%" height="100%">
