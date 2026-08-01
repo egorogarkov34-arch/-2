@@ -41,6 +41,7 @@ h2 { font-size: 17px; letter-spacing: -.025em; margin: 0; }
 .body-water-wrap { width: min(100%, 284px); height: 385px; position: relative; display: grid; place-items: center; }
 .body-water { height: 100%; width: auto; overflow: visible; }
 .silhouette-base { fill: #15191d; stroke: #314356; stroke-width: 1.5; }
+.head-fill { fill: #15191d; stroke: none; }
 .silhouette-stroke { stroke: #80c4ff; stroke-opacity: .8; stroke-width: 1.45; fill: none; }
 .body-ticks { stroke: #d9edff; stroke-opacity: .28; stroke-width: 1; }
 .body-scale { position: absolute; height: 294px; top: 48px; left: 0; color: #8c949d; font-size: 10px; display: flex; flex-direction: column; justify-content: space-between; }
