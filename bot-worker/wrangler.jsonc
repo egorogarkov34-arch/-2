@@ -7,6 +7,9 @@
   "vars": {
     "AQUA_APP_URL": "https://aquora-water.onrender.com"
   },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
   "kv_namespaces": [
     {
       "binding": "PROFILES",
