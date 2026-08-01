@@ -9,6 +9,7 @@ const telegramUser = telegram()?.initDataUnsafe.user
 const telegramUserId = telegramUser?.id ?? 'guest'
 const storageKey = `aquora-hydration-v2:${telegramUserId}`
 const cloudUserStateKey = 'aquora:user-state'
+const hydrationProfileFields = ['age', 'gender', 'height', 'weight', 'activity'] as const
 
 const initialProfile = {
   name: telegramUser?.username ? `@${telegramUser.username}` : telegramUser?.first_name ?? 'Пользователь',
@@ -26,6 +27,10 @@ const initialProfile = {
 
 const syncUserState = (state: Pick<HydrationState, 'profile' | 'goal' | 'goalMode'>) =>
   syncToCloud(cloudUserStateKey, { profile: state.profile, goal: state.goal, goalMode: state.goalMode } satisfies StoredUserState)
+
+function changesHydrationNeed(profile: Partial<HydrationState['profile']>) {
+  return hydrationProfileFields.some((field) => field in profile)
+}
 
 export const useHydrationStore = create<HydrationState>()(
   persist(
@@ -73,21 +78,28 @@ export const useHydrationStore = create<HydrationState>()(
         return next
       }),
       updateProfile: (profile) => set((state) => {
-        const next = { profile: { ...state.profile, ...profile } }
+        const nextProfile = { ...state.profile, ...profile }
+        const next = changesHydrationNeed(profile)
+          ? { profile: nextProfile, goal: calculateWaterGoal(nextProfile), goalMode: 'auto' as const }
+          : { profile: nextProfile }
         syncUserState({ ...state, ...next })
         return next
       }),
-      restoreUserState: (stored) => set((state) => ({
-        profile: { ...initialProfile, ...state.profile, ...stored.profile, reminderInterval: normalizeReminderInterval(stored.profile?.reminderInterval ?? state.profile.reminderInterval) },
-        goal: typeof stored.goal === 'number' && stored.goal >= 500 && stored.goal <= 10_000 ? stored.goal : state.goal,
-        goalMode: stored.goalMode ?? state.goalMode
-      }))
+      restoreUserState: (stored) => set((state) => {
+        const profile = { ...initialProfile, ...state.profile, ...stored.profile, reminderInterval: normalizeReminderInterval(stored.profile?.reminderInterval ?? state.profile.reminderInterval) }
+        const goalMode = stored.goalMode === 'custom' ? 'custom' : 'auto'
+        const storedGoal = typeof stored.goal === 'number' && stored.goal >= 500 && stored.goal <= 10_000 ? stored.goal : state.goal
+        return { profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode }
+      })
     }),
     {
       name: storageKey,
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<HydrationState>
-        return { ...currentState, ...persisted, profile: { ...initialProfile, ...persisted.profile, reminderInterval: normalizeReminderInterval(persisted.profile?.reminderInterval) } }
+        const profile = { ...initialProfile, ...persisted.profile, reminderInterval: normalizeReminderInterval(persisted.profile?.reminderInterval) }
+        const goalMode = persisted.goalMode === 'custom' ? 'custom' : 'auto'
+        const storedGoal = typeof persisted.goal === 'number' && persisted.goal >= 500 && persisted.goal <= 10_000 ? persisted.goal : currentState.goal
+        return { ...currentState, ...persisted, profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode }
       }
     }
   )
