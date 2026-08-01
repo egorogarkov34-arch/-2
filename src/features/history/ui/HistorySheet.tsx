@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Droplets, Trash2, X } from 'lucide-react'
 import type { IntakeEntry } from '@/entities/hydration/model/types'
-import { formatMl } from '@/shared/lib/format'
+import { formatMl, todayKey } from '@/shared/lib/format'
 import { haptic } from '@/shared/lib/telegram'
 import { useTranslation } from '@/shared/lib/i18n'
 
@@ -17,13 +17,28 @@ interface Props {
 export function HistorySheet({ open, entries, onClose, onDelete, onClearAll }: Props) {
   const { language, t } = useTranslation()
   const [clearConfirmationOpen, setClearConfirmationOpen] = useState(false)
+  const [currentDay, setCurrentDay] = useState(() => todayKey())
   const locale = language === 'en' ? 'en-US' : 'ru-RU'
-  const sortedEntries = [...entries].sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+  const activeDay = todayKey()
+  const sortedEntries = entries
+    .filter((entry) => todayKey(new Date(entry.createdAt)) === activeDay)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
   const remove = (id: string) => { haptic.success(); onDelete(id) }
   const close = () => { setClearConfirmationOpen(false); onClose() }
   const clearAll = () => { haptic.success(); onClearAll(); setClearConfirmationOpen(false) }
 
-  useEffect(() => { if (!open) setClearConfirmationOpen(false) }, [open])
+  useEffect(() => {
+    if (!open) {
+      setClearConfirmationOpen(false)
+      return undefined
+    }
+
+    setCurrentDay(todayKey())
+    const nextDay = new Date()
+    nextDay.setHours(24, 0, 1, 0)
+    const timer = window.setTimeout(() => setCurrentDay(todayKey()), nextDay.getTime() - Date.now())
+    return () => window.clearTimeout(timer)
+  }, [open, currentDay])
 
   return <AnimatePresence>{open && <>
     <motion.button className="sheet-scrim" aria-label={t('close')} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close}/>
