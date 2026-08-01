@@ -54,6 +54,13 @@ export const useHydrationStore = create<HydrationState>()(
           syncToCloud('aquora:intake', intake)
           return { intake }
         }),
+      clearTodayWater: () =>
+        set((state) => {
+          const currentDay = todayKey()
+          const intake = state.intake.filter((entry) => todayKey(new Date(entry.createdAt)) !== currentDay)
+          syncToCloud('aquora:intake', intake)
+          return { intake }
+        }),
       setGoal: (goal) => set((state) => {
         const next = { goal, goalMode: 'custom' as const }
         syncUserState({ ...state, ...next })
