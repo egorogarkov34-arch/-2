@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { Bell, ChevronRight, Droplets, History, PencilLine, Plus } from 'lucide-react'
 import { useHydrationStore, selectTodayAmount } from '@/entities/hydration/model/store'
 import { BodyWater } from '@/entities/hydration/ui/BodyWater'
@@ -11,8 +11,8 @@ import { haptic } from '@/shared/lib/telegram'
 import { telegram } from '@/shared/lib/telegram'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 
-const container = { hidden: {}, show: { transition: { staggerChildren: .07 } } }
-const item = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 180, damping: 20 } } }
+const container: Variants = { hidden: {}, show: { transition: { staggerChildren: .07 } } }
+const item: Variants = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 180, damping: 20 } } }
 
 export default function HomePage() {
   const [sheetOpen, setSheetOpen] = useState(false)
