@@ -348,6 +348,21 @@ async function sendScheduledReminders(env: Env) {
   } while (cursor)
 }
 
+async function sendTestReminder(env: Env, message: TelegramMessage) {
+  const userId = message.from?.id
+  if (!userId) return
+
+  const profile = await env.PROFILES.get<StoredProfile>(profileKey(userId), 'json')
+  if (!profile) {
+    await sendMessage(env, message.chat.id, '🧪 <b>Проверка напоминаний</b>\n\nОткройте Mini App один раз, чтобы бот получил вашу цель и настройки.')
+    return
+  }
+
+  const now = localTime(profile.timezoneOffsetMinutes)
+  const todayAmount = profile.todayDate === localDateKey(now) ? profile.todayAmount : 0
+  await sendMessage(env, message.chat.id, reminderText(profile, todayAmount, userId, now))
+}
+
 async function handleProfileSync(request: Request, env: Env) {
   let payload: ProfileSyncPayload
   try {
@@ -405,6 +420,8 @@ export default {
       await sendMessage(env, message.chat.id, welcomeText)
     } else if (command === '/help') {
       await sendMessage(env, message.chat.id, helpText)
+    } else if (command === '/test') {
+      await sendTestReminder(env, message)
     }
 
     return new Response('ok')
