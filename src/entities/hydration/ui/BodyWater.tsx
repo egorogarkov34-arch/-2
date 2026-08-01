@@ -1,18 +1,20 @@
 import { useId } from 'react'
 import { motion } from 'framer-motion'
 import { clamp } from '@/shared/lib/format'
+import { useTranslation } from '@/shared/lib/i18n'
 
 interface Props { percentage: number }
 
 /** Lightweight SVG silhouette; animated wave is clipped to a human-shaped path. */
 export function BodyWater({ percentage }: Props) {
+  const { language } = useTranslation()
   const uid = useId().replaceAll(':', '')
   const clipId = `body-clip-${uid}`
   const waveId = `water-wave-${uid}`
   const level = 205 - 1.32 * clamp(percentage, 0, 100)
   const bodyPath = 'M140 29c-17 0-30 13-30 30 0 13 8 24 18 28-2 7-12 12-25 16-20 6-31 16-36 36l-12 50c-3 13 6 25 17 25 8 0 13-4 15-12l12-45 7 54-13 66 12 67c2 12 9 18 20 18s17-6 18-18l9-58h3l9 58c1 12 7 18 18 18s18-6 20-18l12-67-13-66 7-54 12 45c2 8 7 12 15 12 11 0 20-12 17-25l-12-50c-5-20-16-30-36-36-13-4-25-9-25-16 10-4 18-15 18-28 0-17-13-30-30-30Z'
   return (
-    <div className="body-water-wrap" role="img" aria-label={`Силуэт заполнен водой на ${Math.round(percentage)} процентов`}>
+    <div className="body-water-wrap" role="img" aria-label={language === 'en' ? `Body silhouette filled to ${Math.round(percentage)} percent` : `Силуэт заполнен водой на ${Math.round(percentage)} процентов`}>
       <svg className="body-water" viewBox="0 0 280 390" fill="none">
         <defs>
           <clipPath id={clipId}><path d={bodyPath} /></clipPath>
