@@ -16,6 +16,7 @@ const initialProfile = {
   height: 180,
   weight: 75,
   activity: 'moderate' as const,
+  workoutMinutes: 0,
   reminders: true,
   reminderInterval: 'Каждые 2 часа',
   units: 'ml' as const,
@@ -46,7 +47,13 @@ export const useHydrationStore = create<HydrationState>()(
       setGoal: (goal) => set({ goal }),
       updateProfile: (profile) => set((state) => ({ profile: { ...state.profile, ...profile } }))
     }),
-    { name: storageKey }
+    {
+      name: storageKey,
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<HydrationState>
+        return { ...currentState, ...persisted, profile: { ...initialProfile, ...persisted.profile } }
+      }
+    }
   )
 )
 
