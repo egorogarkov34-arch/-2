@@ -87,6 +87,14 @@ const helpText = `💧 <b>Команды Aquora Water</b>
 /open — открыть трекер
 /help — помощь`
 
+const botDescription = '💧 Aquora Water — ваш умный трекер воды.\n\nНажмите кнопку Start или отправьте /start, чтобы открыть приложение и начать следить за водным балансом.\n\nPress Start or send /start to begin.'
+
+const botCommands = [
+  { command: 'start', description: 'Начать и открыть трекер' },
+  { command: 'open', description: 'Открыть трекер воды' },
+  { command: 'help', description: 'Помощь' },
+]
+
 function miniAppKeyboard(appUrl: string) {
   return {
     inline_keyboard: [[{
@@ -374,12 +382,12 @@ export default {
 
     if (request.method === 'GET') {
       if (url.pathname === '/setup') {
-        const webhook = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ url: url.origin, secret_token: env.TELEGRAM_WEBHOOK_SECRET, allowed_updates: ['message'] }),
-        })
-        return new Response(await webhook.text(), { status: webhook.ok ? 200 : 500 })
+        const [webhook, description, commands] = await Promise.all([
+          telegramRequest(env, 'setWebhook', { url: url.origin, secret_token: env.TELEGRAM_WEBHOOK_SECRET, allowed_updates: ['message'] }),
+          telegramRequest(env, 'setMyDescription', { description: botDescription }),
+          telegramRequest(env, 'setMyCommands', { commands: botCommands }),
+        ])
+        return jsonResponse(env, { ok: webhook && description && commands })
       }
       return new Response('Aquora Telegram bot is online.', { status: 200 })
     }
