@@ -28,6 +28,7 @@ export interface HydrationState {
   profile: Profile
   setActiveTab: (tab: HydrationState['activeTab']) => void
   addWater: (amount: number) => void
+  removeWater: (id: string) => void
   setGoal: (goal: number) => void
   updateProfile: (profile: Partial<Profile>) => void
 }
