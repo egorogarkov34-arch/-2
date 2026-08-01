@@ -1,9 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { HydrationState } from './types'
-import { todayKey } from '@/shared/lib/format'
 import { syncToCloud } from '@/shared/lib/telegram'
 import { calculateWaterGoal } from './calculateGoal'
+import { todayKey } from '@/shared/lib/format'
+
+const telegramUserId = window.Telegram?.WebApp?.initDataUnsafe.user?.id ?? 'guest'
+const storageKey = `aquora-hydration-v2:${telegramUserId}`
 
 const initialProfile = {
   name: 'Егор',
@@ -15,7 +18,8 @@ const initialProfile = {
   reminders: true,
   reminderInterval: 'Каждые 2 часа',
   units: 'ml' as const,
-  language: 'ru' as const
+  language: 'ru' as const,
+  theme: 'dark' as const
 }
 
 export const useHydrationStore = create<HydrationState>()(
@@ -23,11 +27,7 @@ export const useHydrationStore = create<HydrationState>()(
     (set) => ({
       activeTab: 'home',
       goal: calculateWaterGoal(initialProfile),
-      intake: [
-        { id: 'seed-1', amount: 500, createdAt: `${todayKey()}T08:40:00.000Z` },
-        { id: 'seed-2', amount: 600, createdAt: `${todayKey()}T12:10:00.000Z` },
-        { id: 'seed-3', amount: 700, createdAt: `${todayKey()}T15:30:00.000Z` }
-      ],
+      intake: [],
       profile: initialProfile,
       setActiveTab: (activeTab) => set({ activeTab }),
       addWater: (amount) =>
@@ -39,7 +39,7 @@ export const useHydrationStore = create<HydrationState>()(
       setGoal: (goal) => set({ goal }),
       updateProfile: (profile) => set((state) => ({ profile: { ...state.profile, ...profile } }))
     }),
-    { name: 'aquora-hydration-v1' }
+    { name: storageKey }
   )
 )
 
