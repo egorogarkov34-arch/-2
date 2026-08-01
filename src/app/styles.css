@@ -94,5 +94,10 @@ body[data-theme="light"] { color-scheme: light; background: #f3f5f8; color: #151
 .history-empty svg { margin-bottom: 12px; color: #69b9ff; }
 .history-empty strong { color: #d8dee5; font-size: 15px; }
 .history-empty p { max-width: 230px; margin: 7px 0 0; font-size: 12px; line-height: 1.45; }
+.frequency-options { display: grid; gap: 8px; }
+.frequency-options button { min-height: 56px; padding: 0 15px; border: 1px solid #FFFFFF0E; border-radius: 15px; background: #202226; display: flex; justify-content: space-between; align-items: center; color: #dce9f6; text-align: left; }
+.frequency-options button:active, .frequency-options button.selected { border-color: #63b4ff8f; background: #1c4e7e; color: #f0f8ff; }
+body[data-theme="light"] .frequency-options button { background: #f2f5f8; border-color: #dfe5eb; color: #1c2025; }
+body[data-theme="light"] .frequency-options button.selected { background: #dcedff; border-color: #6eaff0; }
 body[data-theme="light"] .history-entry { border-color: #e3e8ed; }
 body[data-theme="light"] .history-entry strong, body[data-theme="light"] .history-empty strong { color: #17191c; }
