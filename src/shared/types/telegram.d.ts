@@ -5,7 +5,9 @@ interface TelegramWebApp {
   enableClosingConfirmation?: () => void
   themeParams: Record<string, string | undefined>
   colorScheme: 'light' | 'dark'
-  initDataUnsafe: { user?: { first_name?: string; last_name?: string } }
+  initDataUnsafe: { user?: { id?: number; first_name?: string; last_name?: string } }
+  safeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number }
+  contentSafeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number }
   HapticFeedback?: {
     impactOccurred: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void
     notificationOccurred: (type: 'error' | 'success' | 'warning') => void
