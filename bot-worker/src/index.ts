@@ -40,6 +40,7 @@ interface StoredProfile {
 
 const encoder = new TextEncoder()
 const WEB_APP_MAX_AGE_SECONDS = 86_400
+const DEFAULT_AQUA_APP_URL = 'https://aquora-water.onrender.com'
 
 const welcomeText = `💧 <b>Добро пожаловать в Aquora Water!</b>
 
@@ -57,7 +58,6 @@ const helpText = `💧 <b>Команды Aquora Water</b>
 
 /start — приветствие и Mini App
 /open — открыть трекер
-/profile — показать ваш профиль
 /help — помощь`
 
 function miniAppKeyboard(appUrl: string) {
@@ -67,6 +67,10 @@ function miniAppKeyboard(appUrl: string) {
       web_app: { url: appUrl },
     }]],
   }
+}
+
+function appUrl(env: Env) {
+  return env.AQUA_APP_URL || DEFAULT_AQUA_APP_URL
 }
 
 function profileKey(userId: number) {
@@ -125,7 +129,7 @@ function emptyProfileMessage() {
 function corsHeaders(env: Env) {
   let origin = '*'
   try {
-    if (env.AQUA_APP_URL) origin = new URL(env.AQUA_APP_URL).origin
+    origin = new URL(appUrl(env)).origin
   } catch {
     // The profile endpoint can still answer safely until the app URL is configured.
   }
@@ -240,7 +244,7 @@ async function sendMessage(env: Env, chatId: number, text: string) {
     chat_id: chatId,
     text,
     parse_mode: 'HTML',
-    reply_markup: miniAppKeyboard(env.AQUA_APP_URL),
+    reply_markup: miniAppKeyboard(appUrl(env)),
   })
 }
 
@@ -304,9 +308,6 @@ export default {
       await sendMessage(env, message.chat.id, welcomeText)
     } else if (command === '/help') {
       await sendMessage(env, message.chat.id, helpText)
-    } else if (command === '/profile') {
-      const profile = message.from ? await env.PROFILES.get<StoredProfile>(profileKey(message.from.id), 'json') : null
-      await sendMessage(env, message.chat.id, profile ? profileMessage(profile) : emptyProfileMessage())
     }
 
     return new Response('ok')
