@@ -17,8 +17,16 @@ export function App() {
   const activeTab = useHydrationStore((state) => state.activeTab)
   const theme = useHydrationStore((state) => state.profile.theme)
   const language = useHydrationStore((state) => state.profile.language)
+  const updateProfile = useHydrationStore((state) => state.updateProfile)
   const [ready, setReady] = useState(false)
-  useEffect(() => { initializeTelegram(); const frame = requestAnimationFrame(() => setReady(true)); return () => cancelAnimationFrame(frame) }, [])
+  useEffect(() => {
+    initializeTelegram()
+    const user = telegram()?.initDataUnsafe.user
+    const name = user?.username ? `@${user.username}` : user?.first_name
+    if (name) updateProfile({ name })
+    const frame = requestAnimationFrame(() => setReady(true))
+    return () => cancelAnimationFrame(frame)
+  }, [updateProfile])
   useEffect(() => { if (activeTab !== 'home') telegram()?.MainButton?.hide() }, [activeTab])
   useEffect(() => { document.body.dataset.theme = theme; document.documentElement.lang = language }, [language, theme])
   const page = activeTab === 'home' ? <HomePage/> : activeTab === 'stats' ? <StatisticsPage/> : <ProfilePage/>
