@@ -4,6 +4,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-01",
   "workers_dev": true,
+  "vars": {
+    "AQUA_APP_URL": "https://aquora-water.onrender.com"
+  },
   "kv_namespaces": [
     {
       "binding": "PROFILES",
