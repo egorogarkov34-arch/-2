@@ -28,3 +28,12 @@ export const syncToCloud = (key: string, value: unknown) => {
   if (!app?.CloudStorage) return
   app.CloudStorage.setItem(key, JSON.stringify(value))
 }
+
+export const loadFromCloud = <T>(key: string): Promise<T | null> => new Promise((resolve) => {
+  const app = telegram()
+  if (!app?.CloudStorage) { resolve(null); return }
+  app.CloudStorage.getItem(key, (error, value) => {
+    if (error || !value) { resolve(null); return }
+    try { resolve(JSON.parse(value) as T) } catch { resolve(null) }
+  })
+})
