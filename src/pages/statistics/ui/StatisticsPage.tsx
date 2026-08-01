@@ -56,21 +56,18 @@ function getChartData(period: Period, amountsByDay: Record<string, number>, loca
     const year = now.getFullYear()
     const month = now.getMonth()
     const monthEnd = new Date(year, month + 1, 0)
-    const weeks: ChartPoint[] = []
-    let weekStart = new Date(year, month, 1)
+    const daysInMonth = monthEnd.getDate()
 
-    while (weekStart <= monthEnd) {
-      const mondayBasedDay = (weekStart.getDay() + 6) % 7
-      const calendarWeekEnd = addDays(weekStart, 6 - mondayBasedDay)
-      const weekEnd = new Date(Math.min(calendarWeekEnd.getTime(), monthEnd.getTime()))
+    return Array.from({ length: 4 }, (_, weekIndex) => {
+      const firstDay = weekIndex * 7 + 1
+      const lastDay = weekIndex === 3 ? daysInMonth : Math.min(firstDay + 6, daysInMonth)
+      const weekStart = new Date(year, month, firstDay)
+      const weekEnd = new Date(year, month, lastDay)
       const amount = getDateRange(weekStart, weekEnd)
         .reduce((total, date) => total + (amountsByDay[todayKey(date)] ?? 0), 0)
 
-      weeks.push({ label: `${weekStart.getDate()}–${weekEnd.getDate()}`, amount })
-      weekStart = addDays(weekEnd, 1)
-    }
-
-    return weeks
+      return { label: `${firstDay}–${lastDay}`, amount }
+    })
   }
 
   return Array.from({ length: 12 }, (_, month) => {
