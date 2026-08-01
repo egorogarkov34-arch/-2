@@ -44,7 +44,7 @@ function buildAmountByDay(intake: IntakeEntry[]) {
   }, {})
 }
 
-function getChartData(period: Period, amountsByDay: Record<string, number>, locale: string, now: Date): ChartPoint[] {
+function getChartData(period: Period, amountsByDay: Record<string, number>, locale: string, now: Date, selectedYear: number): ChartPoint[] {
   if (period === 'week') {
     return getDateRange(addDays(now, -6), now).map((date) => ({
       label: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date).replace('.', ''),
@@ -71,8 +71,8 @@ function getChartData(period: Period, amountsByDay: Record<string, number>, loca
   }
 
   return Array.from({ length: 12 }, (_, month) => {
-    const monthStart = new Date(now.getFullYear(), month, 1)
-    const monthEnd = new Date(now.getFullYear(), month + 1, 0)
+    const monthStart = new Date(selectedYear, month, 1)
+    const monthEnd = new Date(selectedYear, month + 1, 0)
     const amount = getDateRange(monthStart, monthEnd)
       .reduce((total, date) => total + (amountsByDay[todayKey(date)] ?? 0), 0)
 
@@ -83,14 +83,16 @@ function getChartData(period: Period, amountsByDay: Record<string, number>, loca
   })
 }
 
-function getActiveDates(period: Period, now: Date) {
+function getActiveDates(period: Period, now: Date, selectedYear: number) {
   if (period === 'week') return getDateRange(addDays(now, -6), now)
   if (period === 'month') return getDateRange(new Date(now.getFullYear(), now.getMonth(), 1), now)
-  return getDateRange(new Date(now.getFullYear(), 0, 1), now)
+  const yearEnd = selectedYear === now.getFullYear() ? now : new Date(selectedYear, 11, 31)
+  return getDateRange(new Date(selectedYear, 0, 1), yearEnd)
 }
 
 export default function StatisticsPage() {
   const [period, setPeriod] = useState<Period>('week')
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear())
   const goal = useHydrationStore((state) => state.goal)
   const intake = useHydrationStore((state) => state.intake)
   const { language, t } = useTranslation()
@@ -98,15 +100,20 @@ export default function StatisticsPage() {
   const now = new Date()
   const dayKey = todayKey(now)
   const formatVolume = (value: number) => `${(value / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} ${t('litres')}`
+  const availableYears = useMemo(() => {
+    const currentYear = now.getFullYear()
+    const intakeYears = intake.map((entry) => new Date(entry.createdAt).getFullYear())
+    return [...new Set([currentYear, ...intakeYears])].sort((first, second) => second - first)
+  }, [intake, now.getFullYear()])
 
   const { data, activeDates, amountsByDay } = useMemo(() => {
     const totals = buildAmountByDay(intake)
     return {
       amountsByDay: totals,
-      data: getChartData(period, totals, locale, now),
-      activeDates: getActiveDates(period, now),
+      data: getChartData(period, totals, locale, now, selectedYear),
+      activeDates: getActiveDates(period, now, selectedYear),
     }
-  }, [dayKey, intake, locale, period])
+  }, [dayKey, intake, locale, period, selectedYear])
 
   const total = data.reduce((sum, entry) => sum + entry.amount, 0)
   const average = activeDates.length
@@ -148,7 +155,6 @@ export default function StatisticsPage() {
           <p className="eyebrow">{t('yourRhythm')}</p>
           <h1>{t('stats')}</h1>
         </div>
-        <button className="period-dropdown">{now.getFullYear()} <ChevronDown size={16} /></button>
       </header>
 
       <div className="period-tabs" role="tablist">
@@ -162,7 +168,15 @@ export default function StatisticsPage() {
       <motion.section className="chart-card primary-chart" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
         <div className="section-row">
           <div>
-            <p className="eyebrow">{periodLabel}{period === 'month' ? ` · ${currentMonthLabel}` : ''}</p>
+            <div className="chart-period-heading">
+              <p className="eyebrow">{periodLabel}{period === 'month' ? ` · ${currentMonthLabel}` : ''}</p>
+              {period === 'year' && <label className="year-picker">
+                <select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} aria-label={t('year')}>
+                  {availableYears.map((year) => <option value={year} key={year}>{year}</option>)}
+                </select>
+                <ChevronDown size={14} aria-hidden="true" />
+              </label>}
+            </div>
             <h2>{formatVolume(average)} <small>{t('average')}</small></h2>
           </div>
           <span className="goal-chip">{complete}% {t('goalPercent')}</span>
