@@ -4,6 +4,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContaine
 import { ChevronDown, Flame, Trophy } from 'lucide-react'
 import { useHydrationStore } from '@/entities/hydration/model/store'
 import { useTranslation } from '@/shared/lib/i18n'
+import { todayKey } from '@/shared/lib/format'
 
 const periods = [{ id: 'today', key: 'todayTab' }, { id: 'week', key: 'week' }, { id: 'month', key: 'month' }, { id: 'year', key: 'year' }] as const
 type Period = typeof periods[number]['id']
@@ -18,8 +19,8 @@ export default function StatisticsPage() {
   const data = useMemo(() => Array.from({ length: 7 }, (_, index) => {
     const date = new Date()
     date.setDate(date.getDate() - (6 - index))
-    const key = date.toISOString().slice(0, 10)
-    const amount = intake.filter((entry) => entry.createdAt.startsWith(key)).reduce((sum, entry) => sum + entry.amount, 0)
+    const key = todayKey(date)
+    const amount = intake.filter((entry) => todayKey(new Date(entry.createdAt)) === key).reduce((sum, entry) => sum + entry.amount, 0)
     return { day: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date).replace('.', ''), amount }
   }), [intake, locale])
   const average = Math.round(data.reduce((sum, entry) => sum + entry.amount, 0) / data.length)
@@ -28,7 +29,7 @@ export default function StatisticsPage() {
   const axisTicks = [0, 1, 2, 3].map((step) => Math.round((axisUpperBound * step) / 3))
   const complete = Math.round((data.filter((entry) => entry.amount >= goal).length / data.length) * 100)
   const total = data.reduce((sum, entry) => sum + entry.amount, 0)
-  const record = Math.max(0, ...Object.values(intake.reduce<Record<string, number>>((daysByDate, entry) => { const key = entry.createdAt.slice(0, 10); daysByDate[key] = (daysByDate[key] ?? 0) + entry.amount; return daysByDate }, {})))
+  const record = Math.max(0, ...Object.values(intake.reduce<Record<string, number>>((daysByDate, entry) => { const key = todayKey(new Date(entry.createdAt)); daysByDate[key] = (daysByDate[key] ?? 0) + entry.amount; return daysByDate }, {})))
   const cards = [{ label: t('streak'), value: total ? `1 ${t('day')}` : `0 ${t('days')}`, icon: Flame, tone: 'orange' }, { label: t('personalRecord'), value: formatVolume(record), icon: Trophy, tone: 'blue' }]
   const periodLabel = t(periods.find((entry) => entry.id === period)?.key ?? 'week')
   return <main className="page stats-page"><header className="page-header"><div><p className="eyebrow">{t('yourRhythm')}</p><h1>{t('stats')}</h1></div><button className="period-dropdown">2026 <ChevronDown size={16}/></button></header>
