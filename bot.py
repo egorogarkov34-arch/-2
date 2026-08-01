@@ -18,6 +18,18 @@ if not TOKEN or not APP_URL:
 
 API = f"https://api.telegram.org/bot{TOKEN}/"
 
+WELCOME_TEXT = """💧 <b>Добро пожаловать в Aquora Water!</b>
+
+Следить за водным балансом стало проще и приятнее.
+Отмечай каждый стакан воды, наблюдай, как силуэт постепенно заполняется, отслеживай прогресс и формируй полезную привычку каждый день.
+<b>Начни прямо сейчас — сделай первый глоток на пути к лучшему самочувствию.</b>
+
+💧 <b>Welcome to Aquora Water!</b>
+
+Staying hydrated has never been this simple.
+Track every glass of water, watch your body fill up as you reach your goal, monitor your progress, and build a healthy habit every day.
+<b>Start now and take your first step toward better hydration.</b>"""
+
 
 def telegram(method: str, data: dict | None = None):
     payload = json.dumps(data or {}).encode("utf-8")
@@ -34,13 +46,13 @@ def telegram(method: str, data: dict | None = None):
     return result["result"]
 
 
-def welcome(chat_id: int, first_name: str = "") -> None:
-    name = f", {first_name}" if first_name else ""
+def welcome(chat_id: int) -> None:
     telegram(
         "sendMessage",
         {
             "chat_id": chat_id,
-            "text": f"Hi{name}! 💧\nOpen Aquora and track your water intake.",
+            "text": WELCOME_TEXT,
+            "parse_mode": "HTML",
             "reply_markup": {
                 "inline_keyboard": [[{
                     "text": "💧 Open tracker",
@@ -64,10 +76,7 @@ def main() -> None:
                 offset = update["update_id"] + 1
                 message = update.get("message", {})
                 if message.get("text", "").startswith("/start"):
-                    welcome(
-                        message["chat"]["id"],
-                        message.get("from", {}).get("first_name", ""),
-                    )
+                    welcome(message["chat"]["id"])
         except KeyboardInterrupt:
             raise
         except Exception as error:
