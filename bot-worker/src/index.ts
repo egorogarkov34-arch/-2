@@ -311,8 +311,9 @@ function reminderText(profile: StoredProfile, todayAmount: number, userId: numbe
   const progress = isEnglish ? 'Today' : 'Сегодня'
   const left = isEnglish ? 'Left to target' : 'До цели осталось'
   const open = isEnglish ? 'Open Aquora to log it' : 'Откройте Aquora, чтобы отметить воду'
+  const unit = isEnglish ? 'ml' : 'мл'
 
-  return `💧 <b>${title}</b>\n\n${messages[index]}\n\n<b>${progress}:</b> ${formatAmount(todayAmount, profile.language)} / ${formatAmount(profile.goal, profile.language)} ml (${percent}%)\n<b>${left}:</b> ${formatAmount(remaining, profile.language)} ml\n\n<i>${open}</i>`
+  return `💧 <b>${title}</b>\n\n${messages[index]}\n\n<b>${progress}:</b> ${formatAmount(todayAmount, profile.language)} / ${formatAmount(profile.goal, profile.language)} ${unit} (${percent}%)\n<b>${left}:</b> ${formatAmount(remaining, profile.language)} ${unit}\n\n<i>${open}</i>`
 }
 
 async function getChatId(env: Env, userId: number) {
