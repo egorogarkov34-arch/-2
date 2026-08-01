@@ -1,5 +1,6 @@
 export type ActivityLevel = 'low' | 'moderate' | 'high'
 export type Gender = 'male' | 'female' | 'other'
+export type ReminderInterval = '30m' | '1h' | '2h' | '3h'
 
 export interface IntakeEntry {
   id: string
@@ -21,7 +22,7 @@ export interface Profile {
   weight: number
   activity: ActivityLevel
   reminders: boolean
-  reminderInterval: string
+  reminderInterval: ReminderInterval
   units: 'ml' | 'oz'
   language: 'ru' | 'en'
   theme: 'dark' | 'light'
@@ -36,6 +37,7 @@ export interface HydrationState {
   setActiveTab: (tab: HydrationState['activeTab']) => void
   addWater: (amount: number) => void
   removeWater: (id: string) => void
+  clearWater: () => void
   setGoal: (goal: number) => void
   setAutomaticGoal: (goal: number) => void
   updateProfile: (profile: Partial<Profile>) => void
