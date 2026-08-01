@@ -18,6 +18,8 @@ Add these variables in the Worker settings. Do not put their values in GitHub.
 
 The `/profile` command shows the user's saved hydration profile.
 
+The Worker is deployed automatically from the `main` branch.
+
 ## Register the webhook
 
 After Cloudflare deploys the Worker, set the Telegram webhook URL to:
