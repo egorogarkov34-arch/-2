@@ -5,36 +5,40 @@ import { GoalSheet } from '@/features/goal/ui/GoalSheet'
 import { haptic } from '@/shared/lib/telegram'
 import { useGoalRecommendation } from '@/entities/hydration/model/useGoalRecommendation'
 import { EditProfileSheet } from '@/features/profile/ui/EditProfileSheet'
+import { useTranslation } from '@/shared/lib/i18n'
 
-interface SettingRow { icon: typeof UserRound; label: string; value?: string; action?: 'toggle' | 'chevron' }
+type RowId = 'reminders' | 'frequency' | 'theme' | 'language'
+interface SettingRow { id?: RowId; icon: typeof UserRound; label: string; value?: string; action?: 'toggle' | 'chevron' }
 
 export default function ProfilePage() {
   const { profile, updateProfile, goal, setGoal } = useHydrationStore()
+  const { t } = useTranslation()
   const recommendation = useGoalRecommendation(profile)
   const [goalOpen, setGoalOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const activityName = profile.activity === 'moderate' ? t('moderate') : profile.activity === 'high' ? t('high') : t('low')
+  const genderName = profile.gender === 'male' ? t('male') : profile.gender === 'female' ? t('female') : t('other')
   const toggleTheme = () => updateProfile({ theme: profile.theme === 'dark' ? 'light' : 'dark' })
   const toggleLanguage = () => updateProfile({ language: profile.language === 'ru' ? 'en' : 'ru' })
   const personal: SettingRow[] = [
-    { icon: UserRound, label: 'Имя', value: profile.name },
-    { icon: Droplets, label: 'Пол', value: profile.gender === 'male' ? 'Мужской' : profile.gender === 'female' ? 'Женский' : 'Другой' },
-    { icon: CalendarDays, label: 'Возраст', value: `${profile.age} лет` },
-    { icon: Scale, label: 'Вес', value: `${profile.weight} кг` },
-    { icon: Ruler, label: 'Рост', value: `${profile.height} см` }
+    { icon: UserRound, label: t('name'), value: profile.name }, { icon: Droplets, label: t('gender'), value: genderName },
+    { icon: CalendarDays, label: t('age'), value: `${profile.age} ${t('years')}` }, { icon: Scale, label: t('weight'), value: `${profile.weight} kg` },
+    { icon: Ruler, label: t('height'), value: `${profile.height} cm` }
   ]
   const preferences: SettingRow[] = [
-    { icon: BellRing, label: 'Напоминания', action: 'toggle' },
-    { icon: BellRing, label: 'Частота уведомлений', value: profile.reminderInterval },
-    { icon: MoonStar, label: 'Тёмная тема', value: profile.theme === 'dark' ? 'Включена' : 'Выключена', action: 'toggle' },
-    { icon: Globe2, label: 'Язык', value: profile.language === 'ru' ? 'Русский' : 'English' }
+    { id: 'reminders', icon: BellRing, label: t('reminders'), action: 'toggle' }, { id: 'frequency', icon: BellRing, label: t('notificationFrequency'), value: profile.reminderInterval },
+    { id: 'theme', icon: MoonStar, label: t('darkTheme'), value: profile.theme === 'dark' ? t('enabled') : t('disabled'), action: 'toggle' },
+    { id: 'language', icon: Globe2, label: t('language'), value: profile.language === 'ru' ? t('russian') : 'English' }
   ]
-  return <main className="page profile-page"><header className="page-header"><div><p className="eyebrow">Личное пространство</p><h1>Профиль</h1></div><div className="avatar">{profile.name.slice(0, 1)}</div></header>
-    <section className="profile-summary"><div className="profile-orb"><Droplets size={25}/></div><div><span>Персональный план</span><strong>{goal / 1000} л в день</strong><p>Рекомендация: {recommendation.data?.value ?? goal} мл{recommendation.data?.temperatureC ? ` · ${recommendation.data.temperatureC}°C` : ''}</p></div><button onClick={() => setGoalOpen(true)}><ChevronRight size={19}/></button></section>
-    <SettingsGroup title="Личные данные" rows={personal} onClick={() => setProfileOpen(true)}/>
-    <section className="settings-section"><h2>Цель и активность</h2><div className="settings-card"><Setting icon={Droplets} label="Дневная цель" value={`${goal} мл`} onClick={() => setGoalOpen(true)}/><Setting icon={CircleHelp} label="Уровень активности" value={profile.activity === 'moderate' ? 'Средний' : profile.activity === 'high' ? 'Высокий' : 'Низкий'} onClick={() => setProfileOpen(true)}/></div></section>
-    <section className="settings-section"><h2>Настройки</h2><div className="settings-card">{preferences.map((row) => <Setting key={row.label} {...row} toggleValue={row.label === 'Напоминания' ? profile.reminders : profile.theme === 'dark'} onToggle={row.label === 'Напоминания' ? () => updateProfile({ reminders: !profile.reminders }) : row.label === 'Тёмная тема' ? toggleTheme : undefined} onClick={row.label === 'Язык' ? toggleLanguage : haptic.tap}/>)}</div></section>
-    <section className="settings-section"><div className="settings-card"><Setting icon={ShieldCheck} label="Политика конфиденциальности" onClick={haptic.tap}/><Setting icon={CircleHelp} label="Поддержка" onClick={haptic.tap}/><Setting icon={Info} label="О приложении" onClick={haptic.tap}/></div></section>
-    <p className="app-version">Aquora · версия 1.0.0</p><GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><EditProfileSheet open={profileOpen} profile={profile} onClose={() => setProfileOpen(false)} onSave={updateProfile}/>
+  const preferenceAction = (id: RowId | undefined) => id === 'reminders' ? () => updateProfile({ reminders: !profile.reminders }) : id === 'theme' ? toggleTheme : undefined
+  const preferenceClick = (id: RowId | undefined) => id === 'language' ? toggleLanguage : haptic.tap
+  return <main className="page profile-page"><header className="page-header"><div><p className="eyebrow">{t('personalSpace')}</p><h1>{t('profile')}</h1></div><div className="avatar">{profile.name.replace('@', '').slice(0, 1).toUpperCase()}</div></header>
+    <section className="profile-summary"><div className="profile-orb"><Droplets size={25}/></div><div><span>{t('personalPlan')}</span><strong>{goal / 1000} L {t('perDay')}</strong><p>{t('recommendation')}: {recommendation.data?.value ?? goal} ml{recommendation.data?.temperatureC ? ` · ${recommendation.data.temperatureC}°C` : ''}</p></div><button onClick={() => setGoalOpen(true)} aria-label={t('dailyGoal')}><ChevronRight size={19}/></button></section>
+    <SettingsGroup title={t('personalData')} rows={personal} onClick={() => setProfileOpen(true)}/>
+    <section className="settings-section"><h2>{t('goalAndActivity')}</h2><div className="settings-card"><Setting icon={Droplets} label={t('dailyGoal')} value={`${goal} ml`} onClick={() => setGoalOpen(true)}/><Setting icon={CircleHelp} label={t('activity')} value={activityName} onClick={() => setProfileOpen(true)}/></div></section>
+    <section className="settings-section"><h2>{t('settings')}</h2><div className="settings-card">{preferences.map((row) => <Setting key={row.id} {...row} toggleValue={row.id === 'reminders' ? profile.reminders : profile.theme === 'dark'} onToggle={preferenceAction(row.id)} onClick={preferenceClick(row.id)}/>)}</div></section>
+    <section className="settings-section"><div className="settings-card"><Setting icon={ShieldCheck} label={t('privacy')} onClick={haptic.tap}/><Setting icon={CircleHelp} label={t('support')} onClick={haptic.tap}/><Setting icon={Info} label={t('about')} onClick={haptic.tap}/></div></section>
+    <p className="app-version">Aquora · {t('version')} 1.0.0</p><GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><EditProfileSheet open={profileOpen} profile={profile} onClose={() => setProfileOpen(false)} onSave={updateProfile}/>
   </main>
 }
 
