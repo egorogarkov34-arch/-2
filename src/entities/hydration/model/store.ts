@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { HydrationState } from './types'
+import type { HydrationState, StoredUserState } from './types'
 import { syncToCloud, telegram } from '@/shared/lib/telegram'
 import { calculateWaterGoal } from './calculateGoal'
 import { todayKey } from '@/shared/lib/format'
@@ -8,6 +8,7 @@ import { todayKey } from '@/shared/lib/format'
 const telegramUser = telegram()?.initDataUnsafe.user
 const telegramUserId = telegramUser?.id ?? 'guest'
 const storageKey = `aquora-hydration-v2:${telegramUserId}`
+const cloudUserStateKey = 'aquora:user-state'
 
 const initialProfile = {
   name: telegramUser?.username ? `@${telegramUser.username}` : telegramUser?.first_name ?? 'Пользователь',
@@ -22,6 +23,9 @@ const initialProfile = {
   language: 'ru' as const,
   theme: 'dark' as const
 }
+
+const syncUserState = (state: Pick<HydrationState, 'profile' | 'goal' | 'goalMode'>) =>
+  syncToCloud(cloudUserStateKey, { profile: state.profile, goal: state.goal, goalMode: state.goalMode } satisfies StoredUserState)
 
 export const useHydrationStore = create<HydrationState>()(
   persist(
@@ -44,9 +48,27 @@ export const useHydrationStore = create<HydrationState>()(
           syncToCloud('aquora:intake', intake)
           return { intake }
         }),
-      setGoal: (goal) => set({ goal, goalMode: 'custom' }),
-      setAutomaticGoal: (goal) => set((state) => state.goalMode === 'auto' ? { goal } : {}),
-      updateProfile: (profile) => set((state) => ({ profile: { ...state.profile, ...profile } }))
+      setGoal: (goal) => set((state) => {
+        const next = { goal, goalMode: 'custom' as const }
+        syncUserState({ ...state, ...next })
+        return next
+      }),
+      setAutomaticGoal: (goal) => set((state) => {
+        if (state.goalMode !== 'auto') return {}
+        const next = { goal }
+        syncUserState({ ...state, ...next })
+        return next
+      }),
+      updateProfile: (profile) => set((state) => {
+        const next = { profile: { ...state.profile, ...profile } }
+        syncUserState({ ...state, ...next })
+        return next
+      }),
+      restoreUserState: (stored) => set((state) => ({
+        profile: { ...initialProfile, ...state.profile, ...stored.profile },
+        goal: typeof stored.goal === 'number' && stored.goal >= 500 && stored.goal <= 10_000 ? stored.goal : state.goal,
+        goalMode: stored.goalMode ?? state.goalMode
+      }))
     }),
     {
       name: storageKey,
