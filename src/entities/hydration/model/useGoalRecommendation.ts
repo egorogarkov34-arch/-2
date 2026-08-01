@@ -5,7 +5,7 @@ import { calculateWaterGoal } from './calculateGoal'
 
 export function useGoalRecommendation(profile: Profile) {
   return useQuery({
-    queryKey: ['hydration-goal', profile.weight, profile.height, profile.age, profile.gender, profile.activity],
+    queryKey: ['hydration-goal', profile.weight, profile.height, profile.age, profile.gender, profile.activity, profile.workoutMinutes],
     queryFn: async () => {
       const weather = await getLocalWeather()
       return { value: calculateWaterGoal(profile, { temperatureC: weather.temperatureC }), temperatureC: weather.temperatureC }
