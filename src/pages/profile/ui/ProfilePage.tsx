@@ -5,6 +5,7 @@ import { haptic } from '@/shared/lib/telegram'
 import { useGoalRecommendation } from '@/entities/hydration/model/useGoalRecommendation'
 import { EditProfileSheet } from '@/features/profile/ui/EditProfileSheet'
 import { GoalSheet } from '@/features/goal/ui/GoalSheet'
+import { ReminderFrequencySheet } from '@/features/reminders/ui/ReminderFrequencySheet'
 import { useTranslation } from '@/shared/lib/i18n'
 import { calculateWaterGoal } from '@/entities/hydration/model/calculateGoal'
 
@@ -17,6 +18,7 @@ export default function ProfilePage() {
   const recommendation = useGoalRecommendation(profile)
   const [profileOpen, setProfileOpen] = useState(false)
   const [goalOpen, setGoalOpen] = useState(false)
+  const [frequencyOpen, setFrequencyOpen] = useState(false)
   const recommendedGoal = recommendation.data?.value ?? calculateWaterGoal(profile)
   useEffect(() => { setAutomaticGoal(recommendedGoal) }, [recommendedGoal, setAutomaticGoal])
   const activityName = profile.activity === 'moderate' ? t('moderate') : profile.activity === 'high' ? t('high') : t('low')
@@ -34,14 +36,14 @@ export default function ProfilePage() {
     { id: 'language', icon: Globe2, label: t('language'), value: profile.language === 'ru' ? t('russian') : 'English' }
   ]
   const preferenceAction = (id: RowId | undefined) => id === 'reminders' ? () => updateProfile({ reminders: !profile.reminders }) : id === 'theme' ? toggleTheme : undefined
-  const preferenceClick = (id: RowId | undefined) => id === 'language' ? toggleLanguage : haptic.tap
+  const preferenceClick = (id: RowId | undefined) => id === 'language' ? toggleLanguage : id === 'frequency' ? () => setFrequencyOpen(true) : haptic.tap
   return <main className="page profile-page"><header className="page-header"><div><p className="eyebrow">{t('personalSpace')}</p><h1>{t('profile')}</h1></div><div className="avatar">{profile.name.replace('@', '').slice(0, 1).toUpperCase()}</div></header>
     <section className="profile-summary"><div className="profile-orb"><Droplets size={25}/></div><div><strong>{goal / 1000} L {t('perDay')}</strong><p>{goalMode === 'auto' ? t('personalPlanHint') : t('customAmount')}{recommendation.data?.temperatureC ? ` · ${recommendation.data.temperatureC}°C` : ''}</p></div></section>
     <SettingsGroup title={t('personalData')} rows={personal} onClick={() => setProfileOpen(true)}/>
     <section className="settings-section"><h2>{t('goalAndActivity')}</h2><div className="settings-card"><Setting icon={Droplets} label={t('goal')} value={`${goal} ml`} onClick={() => setGoalOpen(true)}/><Setting icon={CircleHelp} label={t('activity')} value={activityName} onClick={() => setProfileOpen(true)}/></div></section>
     <section className="settings-section"><h2>{t('settings')}</h2><div className="settings-card">{preferences.map((row) => <Setting key={row.id} {...row} toggleValue={row.id === 'reminders' ? profile.reminders : profile.theme === 'dark'} onToggle={preferenceAction(row.id)} onClick={preferenceClick(row.id)}/>)}</div></section>
     <section className="settings-section"><div className="settings-card"><Setting icon={ShieldCheck} label={t('privacy')} onClick={haptic.tap}/><Setting icon={CircleHelp} label={t('support')} onClick={haptic.tap}/><Setting icon={Info} label={t('about')} onClick={haptic.tap}/></div></section>
-    <p className="app-version">Aquora · {t('version')} 1.0.0</p><GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><EditProfileSheet open={profileOpen} profile={profile} onClose={() => setProfileOpen(false)} onSave={updateProfile}/>
+    <p className="app-version">Aquora · {t('version')} 1.0.0</p><GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><ReminderFrequencySheet open={frequencyOpen} value={profile.reminderInterval} onClose={() => setFrequencyOpen(false)} onSave={(reminderInterval) => updateProfile({ reminderInterval })}/><EditProfileSheet open={profileOpen} profile={profile} onClose={() => setProfileOpen(false)} onSave={updateProfile}/>
   </main>
 }
 
