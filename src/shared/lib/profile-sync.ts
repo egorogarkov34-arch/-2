@@ -3,25 +3,33 @@ import { telegram } from './telegram'
 
 const profileEndpoint = 'https://aquora-water-bot.egorogarkov34.workers.dev/profile'
 
-export function syncProfileToBot(profile: Profile, goal: number) {
+export async function syncProfileToBot(profile: Profile, goal: number) {
   const initData = telegram()?.initData
-  if (!initData) return
+  if (!initData) return false
 
-  void fetch(profileEndpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      initData,
-      profile: {
-        name: profile.name,
-        age: profile.age,
-        gender: profile.gender,
-        height: profile.height,
-        weight: profile.weight,
-        activity: profile.activity,
-        language: profile.language,
-      },
-      goal,
-    }),
-  }).catch(() => undefined)
+  try {
+    const response = await fetch(profileEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      // The request still completes if the user closes the Mini App right after saving.
+      keepalive: true,
+      body: JSON.stringify({
+        initData,
+        profile: {
+          name: profile.name,
+          age: profile.age,
+          gender: profile.gender,
+          height: profile.height,
+          weight: profile.weight,
+          activity: profile.activity,
+          language: profile.language,
+        },
+        goal,
+      }),
+    })
+
+    return response.ok
+  } catch {
+    return false
+  }
 }
