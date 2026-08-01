@@ -5,6 +5,7 @@ interface TelegramWebApp {
   enableClosingConfirmation?: () => void
   themeParams: Record<string, string | undefined>
   colorScheme: 'light' | 'dark'
+  initData: string
   initDataUnsafe: { user?: { id?: number; first_name?: string; last_name?: string; username?: string } }
   safeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number }
   contentSafeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number }
