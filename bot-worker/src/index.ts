@@ -123,8 +123,15 @@ function emptyProfileMessage() {
 }
 
 function corsHeaders(env: Env) {
+  let origin = '*'
+  try {
+    if (env.AQUA_APP_URL) origin = new URL(env.AQUA_APP_URL).origin
+  } catch {
+    // The profile endpoint can still answer safely until the app URL is configured.
+  }
+
   return {
-    'Access-Control-Allow-Origin': new URL(env.AQUA_APP_URL).origin,
+    'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     Vary: 'Origin',
