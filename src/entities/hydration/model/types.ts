@@ -7,6 +7,12 @@ export interface IntakeEntry {
   createdAt: string
 }
 
+export interface StoredUserState {
+  profile: Profile
+  goal: number
+  goalMode: 'auto' | 'custom'
+}
+
 export interface Profile {
   name: string
   age: number
@@ -33,4 +39,5 @@ export interface HydrationState {
   setGoal: (goal: number) => void
   setAutomaticGoal: (goal: number) => void
   updateProfile: (profile: Partial<Profile>) => void
+  restoreUserState: (state: Partial<StoredUserState>) => void
 }
