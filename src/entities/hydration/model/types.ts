@@ -24,11 +24,13 @@ export interface Profile {
 export interface HydrationState {
   activeTab: 'home' | 'stats' | 'profile'
   goal: number
+  goalMode: 'auto' | 'custom'
   intake: IntakeEntry[]
   profile: Profile
   setActiveTab: (tab: HydrationState['activeTab']) => void
   addWater: (amount: number) => void
   removeWater: (id: string) => void
   setGoal: (goal: number) => void
+  setAutomaticGoal: (goal: number) => void
   updateProfile: (profile: Partial<Profile>) => void
 }
