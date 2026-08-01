@@ -4,7 +4,7 @@ import { Check, Plus, X } from 'lucide-react'
 import { haptic } from '@/shared/lib/telegram'
 import { useTranslation } from '@/shared/lib/i18n'
 
-const amounts = [100, 200, 250, 300, 500, 750, 1000]
+const amounts = [50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
 
 interface Props { open: boolean; onClose: () => void; onAdd: (amount: number) => void }
 
