@@ -38,6 +38,7 @@ export interface HydrationState {
   addWater: (amount: number) => void
   removeWater: (id: string) => void
   clearWater: () => void
+  clearTodayWater: () => void
   setGoal: (goal: number) => void
   setAutomaticGoal: (goal: number) => void
   updateProfile: (profile: Partial<Profile>) => void
