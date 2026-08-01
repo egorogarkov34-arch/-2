@@ -16,7 +16,6 @@ const initialProfile = {
   height: 180,
   weight: 75,
   activity: 'moderate' as const,
-  workoutMinutes: 0,
   reminders: true,
   reminderInterval: 'Каждые 2 часа',
   units: 'ml' as const,
