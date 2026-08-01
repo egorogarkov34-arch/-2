@@ -44,7 +44,14 @@ function buildAmountByDay(intake: IntakeEntry[]) {
   }, {})
 }
 
-function getChartData(period: Period, amountsByDay: Record<string, number>, locale: string, now: Date, selectedYear: number): ChartPoint[] {
+function getChartData(
+  period: Period,
+  amountsByDay: Record<string, number>,
+  locale: string,
+  now: Date,
+  selectedYear: number,
+  selectedMonth: number,
+): ChartPoint[] {
   if (period === 'week') {
     return getDateRange(addDays(now, -6), now).map((date) => ({
       label: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date).replace('.', ''),
@@ -54,7 +61,7 @@ function getChartData(period: Period, amountsByDay: Record<string, number>, loca
 
   if (period === 'month') {
     const year = now.getFullYear()
-    const month = now.getMonth()
+    const month = selectedMonth
     const monthEnd = new Date(year, month + 1, 0)
     const daysInMonth = monthEnd.getDate()
 
@@ -83,9 +90,13 @@ function getChartData(period: Period, amountsByDay: Record<string, number>, loca
   })
 }
 
-function getActiveDates(period: Period, now: Date, selectedYear: number) {
+function getActiveDates(period: Period, now: Date, selectedYear: number, selectedMonth: number) {
   if (period === 'week') return getDateRange(addDays(now, -6), now)
-  if (period === 'month') return getDateRange(new Date(now.getFullYear(), now.getMonth(), 1), now)
+  if (period === 'month') {
+    const monthEnd = new Date(now.getFullYear(), selectedMonth + 1, 0)
+    const endDate = selectedMonth === now.getMonth() ? now : monthEnd
+    return getDateRange(new Date(now.getFullYear(), selectedMonth, 1), endDate)
+  }
   const yearEnd = selectedYear === now.getFullYear() ? now : new Date(selectedYear, 11, 31)
   return getDateRange(new Date(selectedYear, 0, 1), yearEnd)
 }
@@ -93,6 +104,7 @@ function getActiveDates(period: Period, now: Date, selectedYear: number) {
 export default function StatisticsPage() {
   const [period, setPeriod] = useState<Period>('week')
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth())
   const goal = useHydrationStore((state) => state.goal)
   const intake = useHydrationStore((state) => state.intake)
   const { language, t } = useTranslation()
@@ -110,10 +122,10 @@ export default function StatisticsPage() {
     const totals = buildAmountByDay(intake)
     return {
       amountsByDay: totals,
-      data: getChartData(period, totals, locale, now, selectedYear),
-      activeDates: getActiveDates(period, now, selectedYear),
+      data: getChartData(period, totals, locale, now, selectedYear, selectedMonth),
+      activeDates: getActiveDates(period, now, selectedYear, selectedMonth),
     }
-  }, [dayKey, intake, locale, period, selectedYear])
+  }, [dayKey, intake, locale, period, selectedMonth, selectedYear])
 
   const total = data.reduce((sum, entry) => sum + entry.amount, 0)
   const average = activeDates.length
@@ -131,7 +143,10 @@ export default function StatisticsPage() {
     { label: t('personalRecord'), value: formatVolume(record), icon: Trophy, tone: 'blue' },
   ]
   const periodLabel = t(periods.find((entry) => entry.id === period)?.key ?? 'week')
-  const currentMonthLabel = new Intl.DateTimeFormat(locale, { month: 'long' }).format(now)
+  const monthOptions = Array.from({ length: 12 }, (_, month) => ({
+    value: month,
+    label: new Intl.DateTimeFormat(locale, { month: 'long' }).format(new Date(now.getFullYear(), month, 1)),
+  }))
   const trendLabel = language === 'ru'
     ? period === 'week'
       ? '\u0422\u0440\u0435\u043d\u0434 \u0437\u0430 7 \u0434\u043d\u0435\u0439'
@@ -169,7 +184,13 @@ export default function StatisticsPage() {
         <div className="section-row">
           <div>
             <div className="chart-period-heading">
-              <p className="eyebrow">{periodLabel}{period === 'month' ? ` · ${currentMonthLabel}` : ''}</p>
+              <p className="eyebrow">{periodLabel}</p>
+              {period === 'month' && <label className="month-picker">
+                <select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))} aria-label={t('month')}>
+                  {monthOptions.map(({ value, label }) => <option value={value} key={value}>{label}</option>)}
+                </select>
+                <ChevronDown size={14} aria-hidden="true" />
+              </label>}
               {period === 'year' && <label className="year-picker">
                 <select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} aria-label={t('year')}>
                   {availableYears.map((year) => <option value={year} key={year}>{year}</option>)}
