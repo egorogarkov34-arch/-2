@@ -1,5 +1,14 @@
 export const telegram = () => window.Telegram?.WebApp
 
+export const getTelegramInitData = () => {
+  const initData = telegram()?.initData
+  if (initData) return initData
+
+  // Telegram also exposes the signed launch data in the Web App hash.
+  // This fallback covers WebViews where the SDK finishes initialization late.
+  return new URLSearchParams(window.location.hash.slice(1)).get('tgWebAppData') ?? ''
+}
+
 export const initializeTelegram = () => {
   const app = telegram()
   if (!app) return
