@@ -64,7 +64,10 @@ interface ProfileSyncPayload {
 }
 
 const encoder = new TextEncoder()
-const WEB_APP_MAX_AGE_SECONDS = 86_400
+// Telegram can keep an already-open Mini App session alive for several days.
+// The data is still signed by Telegram, so accepting it for longer prevents
+// a user's latest goal from getting stuck in the bot after returning to the app.
+const WEB_APP_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 const DEFAULT_AQUA_APP_URL = 'https://aquora-water.onrender.com'
 
 const welcomeText = `💧 <b>Добро пожаловать в Aquora Water!</b>
