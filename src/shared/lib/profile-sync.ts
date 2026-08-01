@@ -1,10 +1,12 @@
 import type { Profile } from '@/entities/hydration/model/types'
-import { telegram } from './telegram'
+import { getTelegramInitData } from './telegram'
 
 const profileEndpoint = 'https://aquora-water-bot.egorogarkov34.workers.dev/profile'
 
-export async function syncProfileToBot(profile: Profile, goal: number) {
-  const initData = telegram()?.initData
+const wait = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
+
+export async function syncProfileToBot(profile: Profile, goal: number, attempt = 0): Promise<boolean> {
+  const initData = getTelegramInitData()
   if (!initData) return false
 
   try {
@@ -28,8 +30,11 @@ export async function syncProfileToBot(profile: Profile, goal: number) {
       }),
     })
 
-    return response.ok
+    if (response.ok || attempt >= 2) return response.ok
   } catch {
-    return false
+    if (attempt >= 2) return false
   }
+
+  await wait(900 * (attempt + 1))
+  return syncProfileToBot(profile, goal, attempt + 1)
 }
