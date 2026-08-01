@@ -5,9 +5,16 @@ interface Env {
   PROFILES: ProfileStorage
 }
 
+interface KvListResult {
+  keys: Array<{ name: string }>
+  list_complete: boolean
+  cursor?: string
+}
+
 interface ProfileStorage {
   get<T>(key: string, type: 'json'): Promise<T | null>
   put(key: string, value: string): Promise<void>
+  list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<KvListResult>
 }
 
 interface TelegramUser {
@@ -26,6 +33,9 @@ interface TelegramUpdate {
   message?: TelegramMessage
 }
 
+type ReminderInterval = '30m' | '1h' | '2h' | '3h'
+type Language = 'ru' | 'en'
+
 interface StoredProfile {
   name: string
   age: number
@@ -34,24 +44,41 @@ interface StoredProfile {
   weight: number
   activity: 'low' | 'moderate' | 'high'
   goal: number
-  language: 'ru' | 'en'
+  language: Language
+  reminders: boolean
+  reminderInterval: ReminderInterval
+  todayAmount: number
+  todayDate: string
+  timezoneOffsetMinutes: number
+  lastReminderSlot?: string
   updatedAt: string
+}
+
+interface ProfileSyncPayload {
+  initData?: unknown
+  profile?: unknown
+  goal?: unknown
+  todayAmount?: unknown
+  todayDate?: unknown
+  timezoneOffsetMinutes?: unknown
 }
 
 const encoder = new TextEncoder()
 const WEB_APP_MAX_AGE_SECONDS = 86_400
 const DEFAULT_AQUA_APP_URL = 'https://aquora-water.onrender.com'
+const REMINDER_START_HOUR = 9
+const REMINDER_END_HOUR = 22
 
 const welcomeText = `💧 <b>Добро пожаловать в Aquora Water!</b>
 
 Следить за водным балансом стало проще и приятнее.
-Отмечай каждый стакан воды, наблюдай, как силуэт постепенно заполняется, отслеживай прогресс и формируй полезную привычку каждый день.
+Отмечай каждый стакан воды, наблюдай прогресс и формируй полезную привычку каждый день.
 <b>Начни прямо сейчас — сделай первый глоток на пути к лучшему самочувствию.</b>
 
 💧 <b>Welcome to Aquora Water!</b>
 
 Staying hydrated has never been this simple.
-Track every glass of water, watch your body fill up as you reach your goal, monitor your progress, and build a healthy habit every day.
+Track every glass of water, monitor your progress, and build a healthy habit every day.
 <b>Start now and take your first step toward better hydration.</b>`
 
 const helpText = `💧 <b>Команды Aquora Water</b>
@@ -77,53 +104,12 @@ function profileKey(userId: number) {
   return `profile:${userId}`
 }
 
+function chatKey(userId: number) {
+  return `chat:${userId}`
+}
+
 function escapeHtml(value: string) {
   return value.replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character] ?? character)
-}
-
-function genderLabel(gender: StoredProfile['gender'], language: StoredProfile['language']) {
-  const labels = language === 'en'
-    ? { male: 'Male', female: 'Female', other: 'Not specified' }
-    : { male: 'Мужской', female: 'Женский', other: 'Не указан' }
-  return labels[gender]
-}
-
-function activityLabel(activity: StoredProfile['activity'], language: StoredProfile['language']) {
-  const labels = language === 'en'
-    ? { low: 'Low', moderate: 'Moderate', high: 'High' }
-    : { low: 'Низкая', moderate: 'Средняя', high: 'Высокая' }
-  return labels[activity]
-}
-
-function profileMessage(profile: StoredProfile) {
-  const isEnglish = profile.language === 'en'
-  const title = isEnglish ? 'Your Aquora profile' : 'Ваш профиль Aquora'
-  const age = isEnglish ? 'Age' : 'Возраст'
-  const gender = isEnglish ? 'Gender' : 'Пол'
-  const weight = isEnglish ? 'Weight' : 'Вес'
-  const height = isEnglish ? 'Height' : 'Рост'
-  const activity = isEnglish ? 'Activity' : 'Активность'
-  const goal = isEnglish ? 'Daily goal' : 'Цель на день'
-  const hint = isEnglish ? 'Update your data in the Mini App whenever needed.' : 'Изменить данные можно в Mini App в разделе «Профиль».'
-
-  return `👤 <b>${title}</b>
-────────────────
-<b>${escapeHtml(profile.name)}</b>
-
-🎂 <b>${age}</b> · ${profile.age}
-⚥ <b>${gender}</b> · ${genderLabel(profile.gender, profile.language)}
-⚖️ <b>${weight}</b> · ${profile.weight} kg
-📏 <b>${height}</b> · ${profile.height} cm
-⚡ <b>${activity}</b> · ${activityLabel(profile.activity, profile.language)}
-💧 <b>${goal}</b> · ${profile.goal} ml
-
-<i>${hint}</i>`
-}
-
-function emptyProfileMessage() {
-  return `👤 <b>Профиль ещё не заполнен</b>
-
-Откройте Aquora Water, укажите вес, рост, возраст и уровень активности. После этого команда /profile покажет ваши параметры.`
 }
 
 function corsHeaders(env: Env) {
@@ -131,7 +117,7 @@ function corsHeaders(env: Env) {
   try {
     origin = new URL(appUrl(env)).origin
   } catch {
-    // The profile endpoint can still answer safely until the app URL is configured.
+    // The Mini App can recover as soon as a valid URL is configured.
   }
 
   return {
@@ -200,19 +186,30 @@ function numberInRange(value: unknown, min: number, max: number) {
   return Number.isFinite(number) && number >= min && number <= max ? number : null
 }
 
-function parseProfile(payload: unknown): StoredProfile | null {
-  if (!payload || typeof payload !== 'object') return null
-  const data = payload as { profile?: unknown; goal?: unknown }
-  if (!data.profile || typeof data.profile !== 'object') return null
-  const profile = data.profile as Record<string, unknown>
+function parseInterval(value: unknown): ReminderInterval {
+  if (value === '30m' || value === '1h' || value === '2h' || value === '3h') return value
+  if (typeof value === 'string') {
+    if (value.includes('30')) return '30m'
+    if (value.includes('3')) return '3h'
+    if (value.includes('1') || value.includes('Every hour') || value.includes('Каждый час')) return '1h'
+  }
+  return '2h'
+}
+
+function parseProfile(payload: ProfileSyncPayload): StoredProfile | null {
+  if (!payload.profile || typeof payload.profile !== 'object') return null
+  const profile = payload.profile as Record<string, unknown>
   const name = typeof profile.name === 'string' ? profile.name.trim().slice(0, 80) : ''
   const age = numberInRange(profile.age, 12, 120)
   const height = numberInRange(profile.height, 100, 250)
   const weight = numberInRange(profile.weight, 25, 350)
-  const goal = numberInRange(data.goal, 500, 10_000)
+  const goal = numberInRange(payload.goal, 500, 10_000)
+  const todayAmount = numberInRange(payload.todayAmount, 0, 100_000) ?? 0
+  const timezoneOffsetMinutes = numberInRange(payload.timezoneOffsetMinutes, -840, 840) ?? 0
+  const todayDate = typeof payload.todayDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payload.todayDate) ? payload.todayDate : ''
   const gender = profile.gender
   const activity = profile.activity
-  const language = profile.language
+  const language: Language = profile.language === 'en' ? 'en' : 'ru'
   if (!name || age === null || height === null || weight === null || goal === null) return null
   if (gender !== 'male' && gender !== 'female' && gender !== 'other') return null
   if (activity !== 'low' && activity !== 'moderate' && activity !== 'high') return null
@@ -225,25 +222,40 @@ function parseProfile(payload: unknown): StoredProfile | null {
     goal: Math.round(goal),
     gender,
     activity,
-    language: language === 'en' ? 'en' : 'ru',
+    language,
+    reminders: profile.reminders !== false,
+    reminderInterval: parseInterval(profile.reminderInterval),
+    todayAmount: Math.round(todayAmount),
+    todayDate,
+    timezoneOffsetMinutes: Math.round(timezoneOffsetMinutes),
     updatedAt: new Date().toISOString(),
   }
 }
 
 async function telegramRequest(env: Env, method: string, payload: Record<string, unknown>) {
-  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) console.error(`Telegram ${method} failed: ${await response.text()}`)
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!response.ok) {
+      console.error(`Telegram ${method} failed: ${await response.text()}`)
+      return false
+    }
+    return true
+  } catch (error) {
+    console.error(`Telegram ${method} failed`, error)
+    return false
+  }
 }
 
 async function sendMessage(env: Env, chatId: number, text: string) {
-  await telegramRequest(env, 'sendMessage', {
+  return telegramRequest(env, 'sendMessage', {
     chat_id: chatId,
     text,
     parse_mode: 'HTML',
+    disable_web_page_preview: true,
     reply_markup: miniAppKeyboard(appUrl(env)),
   })
 }
@@ -253,10 +265,93 @@ function commandFrom(message: TelegramMessage) {
   return firstWord.split('@')[0].toLowerCase()
 }
 
+function localTime(offsetMinutes: number) {
+  return new Date(Date.now() - offsetMinutes * 60_000)
+}
+
+function localDateKey(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function intervalMinutes(interval: ReminderInterval) {
+  return interval === '30m' ? 30 : interval === '1h' ? 60 : interval === '3h' ? 180 : 120
+}
+
+function formatAmount(amount: number, language: Language) {
+  return new Intl.NumberFormat(language === 'en' ? 'en-US' : 'ru-RU').format(Math.round(amount))
+}
+
+function reminderText(profile: StoredProfile, todayAmount: number, userId: number, now: Date) {
+  const remaining = Math.max(profile.goal - todayAmount, 0)
+  const percent = Math.min(100, Math.round((todayAmount / profile.goal) * 100))
+  const index = (userId + Math.floor((now.getUTCHours() * 60 + now.getUTCMinutes()) / intervalMinutes(profile.reminderInterval))) % 4
+  const isEnglish = profile.language === 'en'
+  const messages = isEnglish
+    ? [
+      'A small glass now will make the rest of the day feel easier.',
+      'Your body will appreciate a quick water break.',
+      'Steady sips are the simplest way to reach your target.',
+      'Take a moment for yourself and add a little water.',
+    ]
+    : [
+      'Небольшой стакан сейчас — и до цели станет заметно ближе.',
+      'Организм будет благодарен за короткую водную паузу.',
+      'Регулярные глотки — самый простой путь к дневной норме.',
+      'Сделайте минуту заботы о себе и выпейте немного воды.',
+    ]
+  const title = isEnglish ? 'Time for water' : 'Время для воды'
+  const progress = isEnglish ? 'Today' : 'Сегодня'
+  const left = isEnglish ? 'Left to target' : 'До цели осталось'
+  const open = isEnglish ? 'Open Aquora to log it' : 'Откройте Aquora, чтобы отметить воду'
+
+  return `💧 <b>${title}</b>\n\n${messages[index]}\n\n<b>${progress}:</b> ${formatAmount(todayAmount, profile.language)} / ${formatAmount(profile.goal, profile.language)} ml (${percent}%)\n<b>${left}:</b> ${formatAmount(remaining, profile.language)} ml\n\n<i>${open}</i>`
+}
+
+async function getChatId(env: Env, userId: number) {
+  const savedChatId = await env.PROFILES.get<number>(chatKey(userId), 'json')
+  return typeof savedChatId === 'number' ? savedChatId : userId
+}
+
+async function processReminder(env: Env, userId: number, profile: StoredProfile) {
+  // Older profile records do not contain this consent flag, so they must never be opted in silently.
+  if (profile.reminders !== true) return
+
+  const now = localTime(profile.timezoneOffsetMinutes)
+  const hour = now.getUTCHours()
+  if (hour < REMINDER_START_HOUR || hour >= REMINDER_END_HOUR) return
+
+  const todayDate = localDateKey(now)
+  const todayAmount = profile.todayDate === todayDate ? profile.todayAmount : 0
+  if (todayAmount >= profile.goal) return
+
+  const minutes = hour * 60 + now.getUTCMinutes()
+  const slot = `${todayDate}:${Math.floor(minutes / intervalMinutes(profile.reminderInterval))}`
+  if (profile.lastReminderSlot === slot) return
+
+  const chatId = await getChatId(env, userId)
+  const sent = await sendMessage(env, chatId, reminderText(profile, todayAmount, userId, now))
+  if (sent) await env.PROFILES.put(profileKey(userId), JSON.stringify({ ...profile, lastReminderSlot: slot }))
+}
+
+async function sendScheduledReminders(env: Env) {
+  let cursor: string | undefined
+  do {
+    const page = await env.PROFILES.list({ prefix: 'profile:', cursor, limit: 100 })
+    for (const key of page.keys) {
+      const userId = Number(key.name.slice('profile:'.length))
+      if (!Number.isSafeInteger(userId)) continue
+      const profile = await env.PROFILES.get<StoredProfile>(key.name, 'json')
+      if (!profile) continue
+      await processReminder(env, userId, profile)
+    }
+    cursor = page.list_complete ? undefined : page.cursor
+  } while (cursor)
+}
+
 async function handleProfileSync(request: Request, env: Env) {
-  let payload: { initData?: unknown; profile?: unknown; goal?: unknown }
+  let payload: ProfileSyncPayload
   try {
-    payload = await request.json() as { initData?: unknown; profile?: unknown; goal?: unknown }
+    payload = await request.json() as ProfileSyncPayload
   } catch {
     return jsonResponse(env, { ok: false, error: 'Invalid JSON' }, 400)
   }
@@ -266,7 +361,8 @@ async function handleProfileSync(request: Request, env: Env) {
 
   const profile = parseProfile(payload)
   if (!profile) return jsonResponse(env, { ok: false, error: 'Invalid profile' }, 422)
-  await env.PROFILES.put(profileKey(userId), JSON.stringify(profile))
+  const existing = await env.PROFILES.get<StoredProfile>(profileKey(userId), 'json')
+  await env.PROFILES.put(profileKey(userId), JSON.stringify({ ...profile, lastReminderSlot: existing?.lastReminderSlot }))
   return jsonResponse(env, { ok: true })
 }
 
@@ -302,6 +398,7 @@ export default {
 
     const message = update.message
     if (!message?.text) return new Response('ok')
+    if (message.from) await env.PROFILES.put(chatKey(message.from.id), JSON.stringify(message.chat.id))
 
     const command = commandFrom(message)
     if (command === '/start' || command === '/open') {
@@ -311,5 +408,9 @@ export default {
     }
 
     return new Response('ok')
+  },
+
+  async scheduled(_controller: unknown, env: Env): Promise<void> {
+    await sendScheduledReminders(env)
   },
 }
