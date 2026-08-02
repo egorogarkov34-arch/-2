@@ -3,11 +3,9 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ErrorBoundary } from '@/shared/ui/ErrorBoundary'
 import { BottomNavigation } from '@/widgets/bottom-navigation/ui/BottomNavigation'
-import { selectTodayAmount, useHydrationStore } from '@/entities/hydration/model/store'
+import { useHydrationStore } from '@/entities/hydration/model/store'
 import type { StoredUserState } from '@/entities/hydration/model/types'
 import { initializeTelegram, loadFromCloud, syncToCloud, telegram } from '@/shared/lib/telegram'
-import { syncProfileToBot } from '@/shared/lib/profile-sync'
-import { todayKey } from '@/shared/lib/format'
 
 const HomePage = lazy(() => import('@/pages/home/ui/HomePage'))
 const StatisticsPage = lazy(() => import('@/pages/statistics/ui/StatisticsPage'))
@@ -22,7 +20,6 @@ export function App() {
   const language = useHydrationStore((state) => state.profile.language)
   const restoreUserState = useHydrationStore((state) => state.restoreUserState)
   const [ready, setReady] = useState(false)
-  const [profileRestored, setProfileRestored] = useState(false)
   useEffect(() => {
     initializeTelegram()
     let active = true
@@ -31,36 +28,10 @@ export function App() {
       if (stored) { restoreUserState(stored); return }
       const current = useHydrationStore.getState()
       syncToCloud('aquora:user-state', { profile: current.profile, goal: current.goal, goalMode: current.goalMode } satisfies StoredUserState)
-    }).finally(() => { if (active) setProfileRestored(true) })
+    })
     const frame = requestAnimationFrame(() => setReady(true))
     return () => { active = false; cancelAnimationFrame(frame) }
   }, [restoreUserState])
-  useEffect(() => {
-    if (!profileRestored) return
-    const sync = () => {
-      const state = useHydrationStore.getState()
-      void syncProfileToBot(state.profile, state.goal, selectTodayAmount(state), todayKey(), new Date().getTimezoneOffset())
-    }
-    sync()
-    const unsubscribe = useHydrationStore.subscribe((state, previousState) => {
-      if (state.profile !== previousState.profile || state.goal !== previousState.goal || state.intake !== previousState.intake) sync()
-    })
-
-    const syncInterval = window.setInterval(sync, 3 * 60_000)
-    window.addEventListener('focus', sync)
-    window.addEventListener('online', sync)
-    // keepalive in the request lets the current goal reach the bot even when
-    // the user immediately closes the Mini App after changing it.
-    document.addEventListener('visibilitychange', sync)
-
-    return () => {
-      unsubscribe()
-      window.clearInterval(syncInterval)
-      window.removeEventListener('focus', sync)
-      window.removeEventListener('online', sync)
-      document.removeEventListener('visibilitychange', sync)
-    }
-  }, [profileRestored])
   useEffect(() => { telegram()?.MainButton?.hide() }, [activeTab])
   useEffect(() => { document.body.dataset.theme = theme; document.documentElement.lang = language }, [language, theme])
   const page = activeTab === 'home' ? <HomePage/> : activeTab === 'stats' ? <StatisticsPage/> : <ProfilePage/>
