@@ -64,6 +64,9 @@ h2 { font-size: 17px; letter-spacing: -.025em; margin: 0; }
 .home-amount-input input { width: 100%; min-width: 0; border: 0; outline: 0; color: #f4f8fc; background: transparent; font-size: 16px; font-weight: 670; letter-spacing: -.02em; }
 .home-amount-input span { color: #7f8993; font-size: 11px; }
 .home-add-custom { height: 40px; padding: 0 12px; border: 0; border-radius: 12px; color: #eff8ff; background: linear-gradient(135deg, #66b9ff, #2a7ef5); font-size: 12px; font-weight: 700; white-space: nowrap; box-shadow: inset 0 1px #ffffff5c; }
+.home-page.is-editing-amount .body-section { overflow: clip; isolation: isolate; }
+.home-page.is-editing-amount .body-water-wrap { opacity: .22; transform: scale(.8); transform-origin: center top; transition: opacity .16s ease, transform .16s ease; }
+.home-page.is-editing-amount .quick-actions, .home-page.is-editing-amount .home-custom-entry { position: relative; z-index: 2; }
 .recent-card { padding: 20px 18px 10px; background: #111315; border: 1px solid #FFFFFF09; border-radius: 23px; margin-top: 16px; }
 .section-row { display: flex; justify-content: space-between; align-items: center; }.section-row button { padding: 0; border: 0; background: none; color: #66b1fa; font-size: 12px; display: flex; gap: 1px; align-items: center; }
 .recent-list { display: grid; margin-top: 12px; }.recent-list > div { display: flex; gap: 9px; align-items: center; padding: 8px 0; border-top: 1px solid #FFFFFF08; }.drop-dot { height: 28px; width: 28px; border-radius: 10px; display: grid; place-items: center; color: #6ab7ff; background: #1c36504f; }.recent-list p { margin: 0; font-size: 13px; font-weight: 560; }.recent-list small { color: #737a83; margin-left: 5px; font-weight: 400; }.mini-delete { margin-left: auto; height: 29px; width: 29px; border: 0; display: grid; place-items: center; border-radius: 9px; color: #9aa5af; background: transparent; }.mini-delete:active { color: #ff9999; background: #9b2b2b22; }.empty-state { color: #737a83; font-size: 13px; margin: 15px 0 6px; }
@@ -136,3 +139,4 @@ body[data-theme="light"] .history-confirm { background: #fff2f2; border-color: #
 body[data-theme="light"] .history-confirm button { color: #26313a; background: #eff2f5; border-color: #dce2e8; }
 @media (min-width: 600px) { .amount-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 @media (max-width: 360px) { .amount-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
