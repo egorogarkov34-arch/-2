@@ -16,7 +16,7 @@ Add these variables in the Worker settings. Do not put their values in GitHub.
 - `/open` — Mini App button.
 - `/help` — command list.
 
-The `/profile` command shows the user's saved hydration profile.
+The bot does not store user profiles and does not send reminder notifications.
 
 The Worker is deployed automatically from the `main` branch.
 
