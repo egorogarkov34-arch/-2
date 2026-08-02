@@ -22,7 +22,7 @@ const copy = {
     personalData: 'Личные данные', name: 'Имя', gender: 'Пол', age: 'Возраст', weight: 'Вес', height: 'Рост',
     male: 'Мужской', female: 'Женский', other: 'Другой', years: 'лет', goalAndActivity: 'Цель и активность',
     activity: 'Уровень активности', low: 'Низкий', moderate: 'Средний', high: 'Высокий', settings: 'Настройки',
-    reminders: 'Напоминания', notificationFrequency: 'Частота уведомлений', every30Minutes: 'Каждые 30 минут', everyHour: 'Каждый час', every2Hours: 'Каждые 2 часа', every3Hours: 'Каждые 3 часа', darkTheme: 'Тёмная тема', enabled: 'Включена',
+    darkTheme: 'Тёмная тема', enabled: 'Включена',
     disabled: 'Выключена', language: 'Язык', russian: 'Русский', privacy: 'Политика конфиденциальности', support: 'Поддержка',
     about: 'О приложении', version: 'версия', editProfile: 'Редактировать профиль', enterName: 'Введите имя',
     activityLevel: 'Уровень активности', saveChanges: 'Сохранить изменения', reload: 'Перезагрузить', errorTitle: 'Что-то пошло не так',
@@ -48,7 +48,7 @@ const copy = {
     personalData: 'Personal details', name: 'Name', gender: 'Gender', age: 'Age', weight: 'Weight', height: 'Height',
     male: 'Male', female: 'Female', other: 'Other', years: 'years', goalAndActivity: 'Goal & activity',
     activity: 'Activity level', low: 'Low', moderate: 'Moderate', high: 'High', settings: 'Settings',
-    reminders: 'Reminders', notificationFrequency: 'Reminder frequency', every30Minutes: 'Every 30 minutes', everyHour: 'Every hour', every2Hours: 'Every 2 hours', every3Hours: 'Every 3 hours', darkTheme: 'Dark theme', enabled: 'On',
+    darkTheme: 'Dark theme', enabled: 'On',
     disabled: 'Off', language: 'Language', russian: 'Russian', privacy: 'Privacy policy', support: 'Support',
     about: 'About the app', version: 'version', editProfile: 'Edit profile', enterName: 'Enter a name',
     activityLevel: 'Activity level', saveChanges: 'Save changes', reload: 'Reload', errorTitle: 'Something went wrong',
@@ -57,15 +57,6 @@ const copy = {
 } as const
 
 export type TranslationKey = keyof typeof copy.ru
-
-type ReminderIntervalKey = 'every30Minutes' | 'everyHour' | 'every2Hours' | 'every3Hours'
-
-export function reminderIntervalKey(value: string): ReminderIntervalKey {
-  if (value === '30m' || value.includes('30')) return 'every30Minutes'
-  if (value === '1h' || value.includes('Every hour') || value.includes('Каждый час')) return 'everyHour'
-  if (value === '3h' || value.includes('3')) return 'every3Hours'
-  return 'every2Hours'
-}
 
 export function useTranslation() {
   const language = useHydrationStore((state) => state.profile.language)
