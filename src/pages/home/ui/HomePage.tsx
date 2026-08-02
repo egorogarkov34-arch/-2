@@ -58,9 +58,9 @@ export default function HomePage() {
     <motion.form className="home-custom-entry" variants={item} onSubmit={(event) => { event.preventDefault(); submitCustomAmount() }}>
       <label htmlFor="home-custom-amount">{t('customAmount')}</label>
       <div className="home-custom-controls">
-        <button type="button" className="amount-step" onClick={() => adjustCustomAmount(-100)} aria-label={`-100 ${millilitres}`}><Minus size={17}/></button>
+        <button type="button" className="amount-step" onClick={() => adjustCustomAmount(-50)} aria-label={`-50 ${millilitres}`}><Minus size={17}/></button>
         <div className="home-amount-input"><input id="home-custom-amount" value={customAmount} onChange={(event) => setCustomAmount(event.target.value.replace(/\D/g, '').slice(0, 4))} onFocus={() => setIsEditingCustomAmount(true)} onBlur={() => setIsEditingCustomAmount(false)} inputMode="numeric" aria-label={t('customAmount')} /><span>{millilitres}</span></div>
-        <button type="button" className="amount-step" onClick={() => adjustCustomAmount(100)} aria-label={`+100 ${millilitres}`}><Plus size={17}/></button>
+        <button type="button" className="amount-step" onClick={() => adjustCustomAmount(50)} aria-label={`+50 ${millilitres}`}><Plus size={17}/></button>
         <motion.button type="submit" className="home-add-custom" whileTap={{ scale: .96 }} disabled={!customAmount || Number(customAmount) > 5000}>{t('addWater')}</motion.button>
       </div>
     </motion.form>
