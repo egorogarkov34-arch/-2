@@ -1,9 +1,10 @@
+import { memo } from 'react'
 import { motion } from 'framer-motion'
 import { clamp } from '@/shared/lib/format'
 
 interface Props { value: number; size?: number; stroke?: number; label?: string }
 
-export function ProgressRing({ value, size = 124, stroke = 9, label }: Props) {
+export const ProgressRing = memo(function ProgressRing({ value, size = 124, stroke = 9, label }: Props) {
   const safeValue = clamp(value, 0, 100)
   const radius = (size - stroke) / 2
   const circumference = 2 * Math.PI * radius
@@ -28,4 +29,4 @@ export function ProgressRing({ value, size = 124, stroke = 9, label }: Props) {
       <span className="ring-label">{label ?? `${Math.round(safeValue)}%`}</span>
     </div>
   )
-}
+})
