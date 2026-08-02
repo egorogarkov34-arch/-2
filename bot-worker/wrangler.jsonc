@@ -6,14 +6,5 @@
   "workers_dev": true,
   "vars": {
     "AQUA_APP_URL": "https://aquora-water.onrender.com"
-  },
-  "triggers": {
-    "crons": ["*/5 * * * *"]
-  },
-  "kv_namespaces": [
-    {
-      "binding": "PROFILES",
-      "id": "bb9b7b7ea03b44e38d76df240b0e385f"
-    }
-  ]
+  }
 }
