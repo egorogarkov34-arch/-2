@@ -1,6 +1,5 @@
 export type ActivityLevel = 'low' | 'moderate' | 'high'
 export type Gender = 'male' | 'female' | 'other'
-export type ReminderInterval = '30m' | '1h' | '2h' | '3h'
 
 export interface IntakeEntry {
   id: string
@@ -21,8 +20,6 @@ export interface Profile {
   height: number
   weight: number
   activity: ActivityLevel
-  reminders: boolean
-  reminderInterval: ReminderInterval
   units: 'ml' | 'oz'
   language: 'ru' | 'en'
   theme: 'dark' | 'light'
