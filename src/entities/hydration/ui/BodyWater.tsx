@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { memo, useId } from 'react'
 import { motion } from 'framer-motion'
 import { clamp } from '@/shared/lib/format'
 import { useTranslation } from '@/shared/lib/i18n'
@@ -6,7 +6,7 @@ import { useTranslation } from '@/shared/lib/i18n'
 interface Props { percentage: number }
 
 /** Lightweight SVG silhouette; animated wave is clipped to a human-shaped path. */
-export function BodyWater({ percentage }: Props) {
+export const BodyWater = memo(function BodyWater({ percentage }: Props) {
   const { language } = useTranslation()
   const uid = useId().replaceAll(':', '')
   const clipId = `body-clip-${uid}`
@@ -30,13 +30,11 @@ export function BodyWater({ percentage }: Props) {
           <linearGradient id={waveId} x1="140" y1="55" x2="140" y2="370" gradientUnits="userSpaceOnUse">
             <stop stopColor="#75CEFF" /><stop offset=".45" stopColor="#328DFF" /><stop offset="1" stopColor="#1462D8" />
           </linearGradient>
-          <filter id={`glow-${uid}`} x="-35%" y="-20%" width="170%" height="150%"><feGaussianBlur stdDeviation="4" /></filter>
         </defs>
         <path d={bodyPath} className="silhouette-base" /><circle {...head} className="head-fill" />
         <g clipPath={`url(#${clipId})`}>
-          {hasWater && <motion.g animate={{ y: level }} transition={{ type: 'spring', stiffness: 32, damping: 18, mass: 0.9 }}>
-            <motion.g animate={{ x: [-13, 13, -13] }} transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut' }}>
-              <path d={waterShape} fill={`url(#${waveId})`} filter={`url(#glow-${uid})`} opacity=".64" />
+          {hasWater && <motion.g className="water-level" style={{ willChange: 'transform' }} animate={{ y: level }} transition={{ type: 'spring', stiffness: 32, damping: 18, mass: 0.9 }}>
+            <motion.g className="water-wave" style={{ willChange: 'transform' }} animate={{ x: [-13, 13, -13] }} transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut' }}>
               <path d={waterShape} fill={`url(#${waveId})`} />
               <path d={waveSurface} stroke="rgba(225,248,255,.92)" strokeWidth="2" fill="none" strokeLinecap="round" />
             </motion.g>
@@ -48,4 +46,4 @@ export function BodyWater({ percentage }: Props) {
       <div className="body-scale"><span>100%</span><span>75%</span><span>50%</span><span>25%</span></div>
     </div>
   )
-}
+})
