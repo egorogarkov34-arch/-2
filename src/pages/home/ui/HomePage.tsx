@@ -21,6 +21,7 @@ export default function HomePage() {
   const [goalOpen, setGoalOpen] = useState(false)
   const [toast, setToast] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('250')
+  const [isEditingCustomAmount, setIsEditingCustomAmount] = useState(false)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake } = useHydrationStore()
   const { language, t } = useTranslation()
@@ -48,9 +49,9 @@ export default function HomePage() {
   const refresh = useCallback(() => { haptic.success(); setRefreshVersion((version) => version + 1) }, [])
   const { ref, pullDistance, isRefreshing } = usePullToRefresh(refresh)
 
-  return <motion.main ref={ref} className="page home-page" variants={container} initial="hidden" animate="show">
+  return <motion.main ref={ref} className={`page home-page${isEditingCustomAmount ? ' is-editing-amount' : ''}`} variants={container} initial="hidden" animate="show">
     <motion.div className="refresh-indicator" animate={{ y: Math.max(-46, pullDistance - 46), opacity: pullDistance ? 1 : 0 }}><Droplets size={16} className={isRefreshing ? 'is-refreshing' : ''}/><span>{isRefreshing ? t('refresh') : t('pullToRefresh')}</span></motion.div>
-    <motion.header className="home-header" variants={item}><div><p className="eyebrow">{t('today')}, {todayDate}</p><h1>{t('greeting')}, {profile.name} <span>✦</span></h1></div></motion.header>
+    <motion.header className="home-header" variants={item}><div><p className="eyebrow">{t('today')}, {todayDate}</p><h1>{t('greeting')}, {profile.name} <span>вњ¦</span></h1></div></motion.header>
     <motion.section className="goal-overview" variants={item} aria-label={t('progress')}><div className="goal-copy"><p>{t('todayBalance')}</p><strong>{formatMl(today, language)} <small>{millilitres}</small></strong><span>{t('of')} {formatMl(goal, language)} {millilitres}</span></div><ProgressRing value={fillPercentage} label={`${completion}%`} size={96} stroke={8}/></motion.section>
     <motion.section className="body-section" variants={item}><div className="body-metrics"><span>{t('remaining')}</span><strong>{remaining ? `${formatMl(remaining, language)} ${millilitres}` : t('goalReached')}</strong></div><BodyWater percentage={fillPercentage}/><button className="edit-goal" onClick={() => { haptic.tap(); setGoalOpen(true) }}><PencilLine size={14}/> {t('goal')} {formatMl(goal, language)} {millilitres}</button></motion.section>
     <motion.section className="quick-actions" variants={item}><motion.button className="add-water-button" onClick={() => { haptic.tap(); setSheetOpen(true) }} whileTap={{ scale: .98 }}><span className="add-icon"><Plus size={24}/></span><span><b>{t('addWater')}</b><small>{t('createEntry')}</small></span><Droplets size={21}/></motion.button><button className="history-button" onClick={() => setHistoryOpen(true)} aria-label={t('history')}><History size={20}/></button></motion.section>
@@ -58,7 +59,7 @@ export default function HomePage() {
       <label htmlFor="home-custom-amount">{t('customAmount')}</label>
       <div className="home-custom-controls">
         <button type="button" className="amount-step" onClick={() => adjustCustomAmount(-100)} aria-label={`-100 ${millilitres}`}><Minus size={17}/></button>
-        <div className="home-amount-input"><input id="home-custom-amount" value={customAmount} onChange={(event) => setCustomAmount(event.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" aria-label={t('customAmount')} /><span>{millilitres}</span></div>
+        <div className="home-amount-input"><input id="home-custom-amount" value={customAmount} onChange={(event) => setCustomAmount(event.target.value.replace(/\D/g, '').slice(0, 4))} onFocus={() => setIsEditingCustomAmount(true)} onBlur={() => setIsEditingCustomAmount(false)} inputMode="numeric" aria-label={t('customAmount')} /><span>{millilitres}</span></div>
         <button type="button" className="amount-step" onClick={() => adjustCustomAmount(100)} aria-label={`+100 ${millilitres}`}><Plus size={17}/></button>
         <motion.button type="submit" className="home-add-custom" whileTap={{ scale: .96 }} disabled={!customAmount || Number(customAmount) > 5000}>{t('addWater')}</motion.button>
       </div>
@@ -68,3 +69,4 @@ export default function HomePage() {
     {toast !== null && <motion.div className="success-toast" initial={{ opacity: 0, y: 16, scale: .95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0 }}><span><Droplets size={17}/></span> +{toast} {millilitres} {t('added')}</motion.div>}
   </motion.main>
 }
+
