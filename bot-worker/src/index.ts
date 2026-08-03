@@ -24,31 +24,14 @@ const INVALID_REQUEST_WINDOW_MS = 60_000
 const MAX_INVALID_REQUESTS_PER_WINDOW = 40
 const invalidRequestBuckets = new Map<string, RequestBucket>()
 
-const welcomeText = `рџ’§ <b>Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ Aquora Water!</b>
+// Telegram must always receive UTF-8 text. Base64 keeps these strings intact
+// across editors and GitHub/Cloudflare deployments on Windows.
+const decodeUtf8 = (encoded: string) => new TextDecoder().decode(Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0)))
+const waterEmoji = String.fromCodePoint(0x1F4A7)
 
-РЎР»РµРґРёС‚СЊ Р·Р° РІРѕРґРЅС‹Рј Р±Р°Р»Р°РЅСЃРѕРј СЃС‚Р°Р»Рѕ РїСЂРѕС‰Рµ Рё РїСЂРёСЏС‚РЅРµРµ.
-РћС‚РјРµС‡Р°Р№ РєР°Р¶РґС‹Р№ СЃС‚Р°РєР°РЅ РІРѕРґС‹, РЅР°Р±Р»СЋРґР°Р№ Р·Р° РїСЂРѕРіСЂРµСЃСЃРѕРј Рё С„РѕСЂРјРёСЂСѓР№ РїРѕР»РµР·РЅСѓСЋ РїСЂРёРІС‹С‡РєСѓ РєР°Р¶РґС‹Р№ РґРµРЅСЊ.
-<b>РќР°С‡РЅРё РїСЂСЏРјРѕ СЃРµР№С‡Р°СЃ вЂ” СЃРґРµР»Р°Р№ РїРµСЂРІС‹Р№ РіР»РѕС‚РѕРє РЅР° РїСѓС‚Рё Рє Р»СѓС‡С€РµРјСѓ СЃР°РјРѕС‡СѓРІСЃС‚РІРёСЋ.</b>
-
-рџ’§ <b>Welcome to Aquora Water!</b>
-
-Staying hydrated has never been this simple.
-Track every glass of water, monitor your progress, and build a healthy habit every day.
-<b>Start now and take your first step toward better hydration.</b>`
-
-const helpText = `рџ’§ <b>РљРѕРјР°РЅРґС‹ Aquora Water</b>
-
-/start вЂ” РїСЂРёРІРµС‚СЃС‚РІРёРµ Рё Mini App
-/open вЂ” РѕС‚РєСЂС‹С‚СЊ С‚СЂРµРєРµСЂ
-/help вЂ” РїРѕРєР°Р·Р°С‚СЊ РєРѕРјР°РЅРґС‹`
-
-const botDescription = 'рџ’§ Aquora Water вЂ” РІР°С€ С‚СЂРµРєРµСЂ РІРѕРґС‹.\n\nРќР°Р¶РјРёС‚Рµ Start РёР»Рё РѕС‚РїСЂР°РІСЊС‚Рµ /start, С‡С‚РѕР±С‹ РѕС‚РєСЂС‹С‚СЊ РїСЂРёР»РѕР¶РµРЅРёРµ Рё РЅР°С‡Р°С‚СЊ СЃР»РµРґРёС‚СЊ Р·Р° РІРѕРґРЅС‹Рј Р±Р°Р»Р°РЅСЃРѕРј.\n\nPress Start or send /start to begin.'
-
-const botCommands = [
-  { command: 'start', description: 'РќР°С‡Р°С‚СЊ Рё РѕС‚РєСЂС‹С‚СЊ С‚СЂРµРєРµСЂ' },
-  { command: 'open', description: 'РћС‚РєСЂС‹С‚СЊ С‚СЂРµРєРµСЂ РІРѕРґС‹' },
-  { command: 'help', description: 'РџРѕРјРѕС‰СЊ' },
-]
+const welcomeText = decodeUtf8('8J+SpyA8Yj7QlNC+0LHRgNC+INC/0L7QttCw0LvQvtCy0LDRgtGMINCyIEFxdW9yYSBXYXRlciE8L2I+CgrQodC70LXQtNC40YLRjCDQt9CwINCy0L7QtNC90YvQvCDQsdCw0LvQsNC90YHQvtC8INGB0YLQsNC70L4g0L/RgNC+0YnQtSDQuCDQv9GA0LjRj9GC0L3QtdC1LgrQntGC0LzQtdGH0LDQuSDQutCw0LbQtNGL0Lkg0YHRgtCw0LrQsNC9INCy0L7QtNGLLCDQvdCw0LHQu9GO0LTQsNC5LCDQutCw0Log0YHQuNC70YPRjdGCINC/0L7RgdGC0LXQv9C10L3QvdC+INC30LDQv9C+0LvQvdGP0LXRgtGB0Y8sINC+0YLRgdC70LXQttC40LLQsNC5INC/0YDQvtCz0YDQtdGB0YEg0Lgg0YTQvtGA0LzQuNGA0YPQuSDQv9C+0LvQtdC30L3Rg9GOINC/0YDQuNCy0YvRh9C60YMg0LrQsNC20LTRi9C5INC00LXQvdGMLgo8Yj7QndCw0YfQvdC4INC/0YDRj9C80L4g0YHQtdC50YfQsNGBIOKAlCDRgdC00LXQu9Cw0Lkg0L/QtdGA0LLRi9C5INCz0LvQvtGC0L7QuiDQvdCwINC/0YPRgtC4INC6INC70YPRh9GI0LXQvNGDINGB0LDQvNC+0YfRg9Cy0YHRgtCy0LjRji48L2I+Cgrwn5KnIDxiPldlbGNvbWUgdG8gQXF1b3JhIFdhdGVyITwvYj4KClN0YXlpbmcgaHlkcmF0ZWQgaGFzIG5ldmVyIGJlZW4gdGhpcyBzaW1wbGUuClRyYWNrIGV2ZXJ5IGdsYXNzIG9mIHdhdGVyLCB3YXRjaCB5b3VyIGJvZHkgZmlsbCB1cCBhcyB5b3UgcmVhY2ggeW91ciBnb2FsLCBtb25pdG9yIHlvdXIgcHJvZ3Jlc3MsIGFuZCBidWlsZCBhIGhlYWx0aHkgaGFiaXQgZXZlcnkgZGF5Lgo8Yj5TdGFydCBub3cgYW5kIHRha2UgeW91ciBmaXJzdCBzdGVwIHRvd2FyZCBiZXR0ZXIgaHlkcmF0aW9uLjwvYj4=')
+const openText = decodeUtf8('8J+SpyA8Yj5BcXVvcmEgV2F0ZXI8L2I+CgrQndCw0LbQvNC40YLQtSDQutC90L7Qv9C60YMg0L3QuNC20LUsINGH0YLQvtCx0Ysg0L7RgtC60YDRi9GC0Ywg0YLRgNC10LrQtdGALgoKVGFwIHRoZSBidXR0b24gYmVsb3cgdG8gb3BlbiB0aGUgdHJhY2tlci4=')
+const helpText = decodeUtf8('8J+SpyA8Yj7QmtC+0LzQsNC90LTRiyBBcXVvcmEgV2F0ZXI8L2I+Cgovc3RhcnQg4oCUINC/0YDQuNCy0LXRgtGB0YLQstC40LUg0LggTWluaSBBcHAKL29wZW4g4oCUINC+0YLQutGA0YvRgtGMINGC0YDQtdC60LXRgAovaGVscCDigJQg0YHQv9C40YHQvtC6INC60L7QvNCw0L3QtA==')
 
 function appUrl(env: Env) {
   return env.AQUA_APP_URL || DEFAULT_AQUA_APP_URL
@@ -57,7 +40,7 @@ function appUrl(env: Env) {
 function miniAppKeyboard(url: string) {
   return {
     inline_keyboard: [[{
-      text: 'рџ’§ Open tracker',
+      text: `${waterEmoji} Open tracker`,
       web_app: { url },
     }]],
   }
@@ -166,8 +149,10 @@ export default {
     if (!message?.text) return textResponse('ok')
 
     const command = commandFrom(message)
-    if (command === '/start' || command === '/open') {
+    if (command === '/start') {
       await sendMessage(env, message.chat.id, welcomeText)
+    } else if (command === '/open') {
+      await sendMessage(env, message.chat.id, openText)
     } else if (command === '/help') {
       await sendMessage(env, message.chat.id, helpText)
     }
