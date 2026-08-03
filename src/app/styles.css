@@ -39,15 +39,11 @@ h2 { font-size: 17px; letter-spacing: -.025em; margin: 0; }
 .body-metrics span { font-size: 11px; color: #77808a; text-transform: uppercase; letter-spacing: .06em; }
 .body-metrics strong { color: #d7eaff; font-size: 13px; }
 .body-water-wrap { width: min(100%, 284px); height: 385px; position: relative; display: grid; place-items: center; contain: layout paint style; isolation: isolate; }
-.body-water { height: 100%; width: auto; overflow: visible; transform: perspective(900px) rotateY(-5deg) rotateX(1deg) translateZ(0); transform-origin: center; }
+.body-water { height: 100%; width: auto; overflow: visible; transform: translateZ(0); }
 .water-level, .water-wave { transform-box: fill-box; transform-origin: center; will-change: transform; }
-.body-water-3d::before { content: ''; position: absolute; z-index: -1; inset: 45px 18px 18px; border-radius: 50%; background: radial-gradient(ellipse at 50% 58%, #328dff1c, transparent 67%); pointer-events: none; }
-.body-volume { pointer-events: none; }
-.body-gloss { pointer-events: none; }
-.body-side-light { fill: #d9f4ff; fill-opacity: .12; pointer-events: none; }
-.silhouette-stroke { stroke-opacity: .86; stroke-width: 1.45; fill: none; }
-.water-surface { stroke: #e5f9ff; stroke-opacity: .94; stroke-width: 2; fill: none; stroke-linecap: round; }
-.water-depth-wave { stroke: #b2ebff; stroke-opacity: .26; stroke-width: 1.15; fill: none; stroke-linecap: round; }
+.silhouette-base { fill: #15191d; stroke: #314356; stroke-width: 1.5; }
+.head-fill { fill: #15191d; stroke: none; }
+.silhouette-stroke { stroke: #80c4ff; stroke-opacity: .8; stroke-width: 1.45; fill: none; }
 .body-ticks { stroke: #d9edff; stroke-opacity: .28; stroke-width: 1; }
 .body-scale { position: absolute; height: 294px; top: 48px; left: 0; color: #8c949d; font-size: 10px; display: flex; flex-direction: column; justify-content: space-between; }
 .edit-goal { position: absolute; right: 2px; bottom: 19px; border: 0; padding: 8px 11px; color: #a7c9e8; background: #14365b75; border-radius: 999px; font-size: 11px; display: flex; gap: 5px; align-items: center; backdrop-filter: blur(8px); transition: background .2s; }
