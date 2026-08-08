@@ -1,5 +1,6 @@
 export type ActivityLevel = 'low' | 'moderate' | 'high'
 export type Gender = 'male' | 'female' | 'other'
+export type BodySkin = 'male-classic' | 'female-classic' | 'male-athlete'
 
 export interface IntakeEntry {
   id: string
@@ -23,6 +24,7 @@ export interface Profile {
   units: 'ml' | 'oz'
   language: 'ru' | 'en'
   theme: 'dark' | 'light'
+  skin: BodySkin
 }
 
 export interface HydrationState {
