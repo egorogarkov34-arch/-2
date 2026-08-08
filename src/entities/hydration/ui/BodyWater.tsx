@@ -1,10 +1,10 @@
 import { memo, useId } from 'react'
 import { motion } from 'framer-motion'
-import { clamp } from '@/shared/lib/format'
+import { clamp, formatMl } from '@/shared/lib/format'
 import { useTranslation } from '@/shared/lib/i18n'
 import type { BodySkin } from '@/entities/hydration/model/types'
 
-interface Props { percentage: number; skin?: BodySkin; compact?: boolean }
+interface Props { percentage: number; skin?: BodySkin; compact?: boolean; goal?: number }
 
 interface SkinShape {
   bodyPath: string
@@ -13,6 +13,7 @@ interface SkinShape {
   headOutline: string
   headExtras?: string[]
   headExtraOutlines?: string[]
+  details?: string[]
 }
 
 const maleHeadOutline = 'M119 84C112 78 108 69 108 58C108 40 122 26 140 26C158 26 172 40 172 58C172 69 168 78 161 84'
@@ -25,23 +26,24 @@ const skins: Record<BodySkin, SkinShape> = {
     headOutline: maleHeadOutline,
   },
   'female-classic': {
-    bodyPath: 'M120 82C119 91 111 96 98 101C80 108 69 122 66 140L57 184C54 197 61 207 71 210C82 213 89 207 92 197L102 160L108 214C110 233 107 250 102 272L99 325C97 349 103 367 116 369C129 371 136 363 137 350L140 304C140 299 141 296 144 296C147 296 148 299 148 304L151 350C152 363 159 371 172 369C185 367 191 349 189 325L186 272C181 250 178 233 180 214L186 160L196 197C199 207 206 213 217 210C227 207 234 197 231 184L222 140C219 122 208 108 190 101C176 96 162 91 161 82Z',
-    bodyOutline: 'M120 82C119 91 111 96 98 101C80 108 69 122 66 140L57 184C54 197 61 207 71 210C82 213 89 207 92 197L102 160L108 214C110 233 107 250 102 272L99 325C97 349 103 367 116 369C129 371 136 363 137 350L140 304C140 299 141 296 144 296C147 296 148 299 148 304L151 350C152 363 159 371 172 369C185 367 191 349 189 325L186 272C181 250 178 233 180 214L186 160L196 197C199 207 206 213 217 210C227 207 234 197 231 184L222 140C219 122 208 108 190 101C176 96 162 91 161 82',
-    headPath: 'M120 83C113 77 110 68 110 58C110 42 123 29 140 29C157 29 170 42 170 58C170 68 167 77 160 83C154 89 126 89 120 83Z',
-    headOutline: 'M120 83C113 77 110 68 110 58C110 42 123 29 140 29C157 29 170 42 170 58C170 68 167 77 160 83',
-    headExtras: ['M168 48C181 48 191 58 191 72C191 80 187 87 180 91C184 81 182 68 174 60C172 56 170 52 168 48Z'],
-    headExtraOutlines: ['M168 48C181 48 191 58 191 72C191 80 187 87 180 91C184 81 182 68 174 60C172 56 170 52 168 48'],
+    bodyPath: 'M121 83C120 92 112 98 97 104C80 111 70 124 67 143L58 185C55 198 62 208 72 211C83 214 90 208 94 197L104 159L110 212C112 225 109 241 104 257C99 274 97 296 99 326C100 349 106 367 118 369C131 371 138 363 139 350L141 304C141 299 142 296 145 296C148 296 149 299 149 304L152 350C153 363 160 371 173 369C185 367 190 349 191 326C193 296 191 274 186 257C181 241 178 225 180 212L186 159L196 197C200 208 207 214 218 211C228 208 235 198 232 185L223 143C220 124 210 111 193 104C178 98 161 92 160 83Z',
+    bodyOutline: 'M121 83C120 92 112 98 97 104C80 111 70 124 67 143L58 185C55 198 62 208 72 211C83 214 90 208 94 197L104 159L110 212C112 225 109 241 104 257C99 274 97 296 99 326C100 349 106 367 118 369C131 371 138 363 139 350L141 304C141 299 142 296 145 296C148 296 149 299 149 304L152 350C153 363 160 371 173 369C185 367 190 349 191 326C193 296 191 274 186 257C181 241 178 225 180 212L186 159L196 197C200 208 207 214 218 211C228 208 235 198 232 185L223 143C220 124 210 111 193 104C178 98 161 92 160 83',
+    headPath: 'M120 85C112 78 108 68 109 56C110 39 123 26 140 26C157 26 171 39 171 56C172 68 167 78 160 85C154 91 126 91 120 85Z',
+    headOutline: 'M120 85C112 78 108 68 109 56C110 39 123 26 140 26C157 26 171 39 171 56C172 68 167 78 160 85',
+    headExtras: ['M168 41C184 43 196 57 196 75C196 92 188 105 175 112C182 96 181 79 174 65C171 57 169 49 168 41Z'],
+    headExtraOutlines: ['M168 41C184 43 196 57 196 75C196 92 188 105 175 112C182 96 181 79 174 65C171 57 169 49 168 41'],
   },
   'male-athlete': {
-    bodyPath: 'M117 82C116 91 107 96 91 101C69 108 56 122 52 142L40 184C37 199 45 213 58 216C71 219 81 212 85 200L97 157L106 215C108 232 104 251 102 272L99 328C97 351 103 369 117 371C131 373 139 364 140 351L142 305C142 300 144 297 148 297C152 297 154 300 154 305L156 351C157 364 165 373 179 371C193 369 199 351 197 328L194 272C192 251 188 232 190 215L199 157L211 200C215 212 225 219 238 216C251 213 259 199 256 184L244 142C240 122 227 108 205 101C189 96 164 91 163 82Z',
-    bodyOutline: 'M117 82C116 91 107 96 91 101C69 108 56 122 52 142L40 184C37 199 45 213 58 216C71 219 81 212 85 200L97 157L106 215C108 232 104 251 102 272L99 328C97 351 103 369 117 371C131 373 139 364 140 351L142 305C142 300 144 297 148 297C152 297 154 300 154 305L156 351C157 364 165 373 179 371C193 369 199 351 197 328L194 272C192 251 188 232 190 215L199 157L211 200C215 212 225 219 238 216C251 213 259 199 256 184L244 142C240 122 227 108 205 101C189 96 164 91 163 82',
+    bodyPath: 'M116 82C115 91 106 96 88 101C66 107 52 120 47 140L35 181C31 197 39 213 53 218C67 223 79 215 84 202L97 157L105 210C108 229 104 248 101 269L97 327C95 352 102 371 117 373C133 375 142 365 143 351L145 304C145 299 147 296 150 296C153 296 155 299 155 304L157 351C158 365 167 375 183 373C198 371 205 352 203 327L199 269C196 248 192 229 195 210L203 157L216 202C221 215 233 223 247 218C261 213 269 197 265 181L253 140C248 120 234 107 212 101C194 96 165 91 164 82Z',
+    bodyOutline: 'M116 82C115 91 106 96 88 101C66 107 52 120 47 140L35 181C31 197 39 213 53 218C67 223 79 215 84 202L97 157L105 210C108 229 104 248 101 269L97 327C95 352 102 371 117 373C133 375 142 365 143 351L145 304C145 299 147 296 150 296C153 296 155 299 155 304L157 351C158 365 167 375 183 373C198 371 205 352 203 327L199 269C196 248 192 229 195 210L203 157L216 202C221 215 233 223 247 218C261 213 269 197 265 181L253 140C248 120 234 107 212 101C194 96 165 91 164 82',
     headPath: `${maleHeadOutline}C155 89 125 89 119 84Z`,
     headOutline: maleHeadOutline,
+    details: ['M90 130C106 139 124 141 140 133C156 141 174 139 190 130', 'M107 161C117 168 128 171 140 165C152 171 163 168 173 161', 'M115 181C123 188 132 191 140 187C148 191 157 188 165 181'],
   },
 }
 
 /** Lightweight SVG skins with one shared, animated water-fill system. */
-export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-classic', compact = false }: Props) {
+export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-classic', compact = false, goal = 0 }: Props) {
   const { language } = useTranslation()
   const uid = useId().replaceAll(':', '')
   const clipId = `body-clip-${uid}`
@@ -52,6 +54,7 @@ export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-clas
   const hasWater = fillPercentage > 0.01
   const waveSurface = 'M-70 6 C-40 -6 -14 19 18 7 S82 -7 116 7 S182 20 216 6 S281 -7 322 7 S366 19 400 5'
   const waterShape = `${waveSurface} V430 H-70Z`
+  const scaleMarks = [100, 75, 50, 25]
   const label = language === 'en' ? `Body silhouette filled to ${Math.round(percentage)} percent` : `\u0421\u0438\u043b\u0443\u044d\u0442 \u0437\u0430\u043f\u043e\u043b\u043d\u0435\u043d \u0432\u043e\u0434\u043e\u0439 \u043d\u0430 ${Math.round(percentage)} \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u043e\u0432`
   return (
     <div className={`body-water-wrap${compact ? ' is-preview' : ''}`} role="img" aria-label={label}>
@@ -62,10 +65,9 @@ export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-clas
         </defs>
         <path d={shape.bodyPath} className="silhouette-base"/><path d={shape.headPath} className="head-fill"/>{shape.headExtras?.map((path) => <path d={path} className="head-fill" key={path}/>)}
         <g clipPath={`url(#${clipId})`}>{hasWater && <motion.g className="water-level" style={{ willChange: 'transform' }} initial={{ y: 390 }} animate={{ y: level }} transition={{ type: 'spring', stiffness: 32, damping: 18, mass: .9 }}><motion.g className="water-wave" style={{ willChange: 'transform' }} animate={{ x: [-13, 13, -13] }} transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut' }}><path d={waterShape} fill={`url(#${waveId})`}/><path d={waveSurface} stroke="rgba(225,248,255,.92)" strokeWidth="2" fill="none" strokeLinecap="round"/></motion.g></motion.g>}</g>
-        <path d={shape.bodyOutline} className="silhouette-stroke"/><path d={shape.headOutline} className="silhouette-stroke"/>{shape.headExtraOutlines?.map((path) => <path d={path} className="silhouette-stroke" key={path}/>)}
-        {!compact && <g className="body-ticks"><line x1="15" y1="74" x2="49" y2="74"/><line x1="15" y1="166" x2="49" y2="166"/><line x1="15" y1="258" x2="49" y2="258"/><line x1="15" y1="350" x2="49" y2="350"/></g>}
+        {shape.details?.map((path) => <path d={path} className="skin-detail" key={path}/>)}<path d={shape.bodyOutline} className="silhouette-stroke"/><path d={shape.headOutline} className="silhouette-stroke"/>{shape.headExtraOutlines?.map((path) => <path d={path} className="silhouette-stroke" key={path}/>)}
       </svg>
-      {!compact && <div className="body-scale"><span>100%</span><span>75%</span><span>50%</span><span>25%</span></div>}
+      {!compact && <div className="body-scale">{scaleMarks.map((mark) => <span key={mark}><b>{formatMl(Math.round(goal * mark / 100), language)} {language === 'ru' ? '\u043c\u043b' : 'ml'}</b><i/></span>)}</div>}
     </div>
   )
 })
