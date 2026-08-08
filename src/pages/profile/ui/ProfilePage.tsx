@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CalendarDays, ChevronRight, CircleHelp, Droplets, Globe2, Info, MoonStar, Ruler, Scale, ShieldCheck, UserRound } from 'lucide-react'
+import { CalendarDays, ChevronRight, CircleHelp, Droplets, Globe2, MoonStar, Ruler, Scale, UserRound } from 'lucide-react'
 import { useHydrationStore } from '@/entities/hydration/model/store'
 import { haptic } from '@/shared/lib/telegram'
 import { useGoalRecommendation } from '@/entities/hydration/model/useGoalRecommendation'
@@ -40,8 +40,7 @@ export default function ProfilePage() {
     <SettingsGroup title={t('personalData')} rows={personal} onClick={setEditingField}/>
     <section className="settings-section"><h2>{t('goalAndActivity')}</h2><div className="settings-card"><Setting icon={Droplets} label={t('goal')} value={`${goal} ${t('millilitres')}`} onClick={() => setGoalOpen(true)}/><Setting icon={CircleHelp} label={t('activity')} value={activityName} onClick={() => setEditingField('activity')}/></div></section>
     <section className="settings-section"><h2>{t('settings')}</h2><div className="settings-card">{preferences.map((row) => <Setting key={row.id} {...row} toggleValue={profile.theme === 'dark'} onToggle={preferenceAction(row.id)} onClick={preferenceClick(row.id)}/>)}</div></section>
-    <section className="settings-section"><div className="settings-card"><Setting icon={ShieldCheck} label={t('privacy')} onClick={haptic.tap}/><Setting icon={CircleHelp} label={t('support')} onClick={haptic.tap}/><Setting icon={Info} label={t('about')} onClick={haptic.tap}/></div></section>
-    <p className="app-version">Aquora · {t('version')} 1.0.0</p><GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><EditProfileFieldSheet open={editingField !== null} field={editingField} profile={profile} onClose={() => setEditingField(null)} onSave={updateProfile}/>
+    <GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><EditProfileFieldSheet open={editingField !== null} field={editingField} profile={profile} onClose={() => setEditingField(null)} onSave={updateProfile}/>
   </main>
 }
 
