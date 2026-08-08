@@ -7,6 +7,7 @@ import { ProgressRing } from '@/entities/hydration/ui/ProgressRing'
 import { AddWaterSheet } from '@/features/log-water/ui/AddWaterSheet'
 import { GoalSheet } from '@/features/goal/ui/GoalSheet'
 import { HistorySheet } from '@/features/history/ui/HistorySheet'
+import { WardrobeSheet } from '@/features/skins/ui/WardrobeSheet'
 import { clamp, formatMl, todayKey } from '@/shared/lib/format'
 import { haptic } from '@/shared/lib/telegram'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
@@ -19,11 +20,12 @@ export default function HomePage() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [goalOpen, setGoalOpen] = useState(false)
+  const [wardrobeOpen, setWardrobeOpen] = useState(false)
   const [toast, setToast] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('250')
   const [isEditingCustomAmount, setIsEditingCustomAmount] = useState(false)
   const [refreshVersion, setRefreshVersion] = useState(0)
-  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake } = useHydrationStore()
+  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake, updateProfile } = useHydrationStore()
   const { language, t } = useTranslation()
   const millilitres = t('millilitres')
   const today = useHydrationStore(selectTodayAmount)
@@ -51,9 +53,9 @@ export default function HomePage() {
 
   return <motion.main ref={ref} className={`page home-page${isEditingCustomAmount ? ' is-editing-amount' : ''}`} variants={container} initial="hidden" animate="show">
     <motion.div className="refresh-indicator" animate={{ y: Math.max(-46, pullDistance - 46), opacity: pullDistance ? 1 : 0 }}><Droplets size={16} className={isRefreshing ? 'is-refreshing' : ''}/><span>{isRefreshing ? t('refresh') : t('pullToRefresh')}</span></motion.div>
-    <motion.header className="home-header" variants={item}><div><p className="eyebrow">{t('today')}, {todayDate}</p><h1>{t('greeting')}, {profile.name} <span>вњ¦</span></h1></div></motion.header>
+    <motion.header className="home-header" variants={item}><div><p className="eyebrow">{t('today')}, {todayDate}</p><h1>{t('greeting')}, {profile.name} <span>✦</span></h1></div></motion.header>
     <motion.section className="goal-overview" variants={item} aria-label={t('progress')}><div className="goal-copy"><p>{t('todayBalance')}</p><strong>{formatMl(today, language)} <small>{millilitres}</small></strong><span>{t('of')} {formatMl(goal, language)} {millilitres}</span></div><ProgressRing value={fillPercentage} label={`${completion}%`} size={96} stroke={8}/></motion.section>
-    <motion.section className="body-section" variants={item}><div className="body-metrics"><span>{t('remaining')}</span><strong>{remaining ? `${formatMl(remaining, language)} ${millilitres}` : t('goalReached')}</strong></div><BodyWater percentage={fillPercentage}/><button className="edit-goal" onClick={() => { haptic.tap(); setGoalOpen(true) }}><PencilLine size={14}/> {t('goal')} {formatMl(goal, language)} {millilitres}</button></motion.section>
+    <motion.section className="body-section" variants={item}><div className="body-metrics"><span>{t('remaining')}</span><strong>{remaining ? `${formatMl(remaining, language)} ${millilitres}` : t('goalReached')}</strong></div><BodyWater percentage={fillPercentage} skin={profile.skin}/><button className="wardrobe-button" onClick={() => { haptic.tap(); setWardrobeOpen(true) }} aria-label={t('wardrobe')}><HangerIcon/></button><button className="edit-goal" onClick={() => { haptic.tap(); setGoalOpen(true) }}><PencilLine size={14}/> {t('goal')} {formatMl(goal, language)} {millilitres}</button></motion.section>
     <motion.section className="quick-actions" variants={item}><motion.button className="add-water-button" onClick={() => { haptic.tap(); setSheetOpen(true) }} whileTap={{ scale: .98 }}><span className="add-icon"><Plus size={24}/></span><span><b>{t('addWater')}</b><small>{t('createEntry')}</small></span><Droplets size={21}/></motion.button><button className="history-button" onClick={() => setHistoryOpen(true)} aria-label={t('history')}><History size={20}/></button></motion.section>
     <motion.form className="home-custom-entry" variants={item} onSubmit={(event) => { event.preventDefault(); submitCustomAmount() }}>
       <label htmlFor="home-custom-amount">{t('customAmount')}</label>
@@ -65,8 +67,11 @@ export default function HomePage() {
       </div>
     </motion.form>
     <motion.section className="recent-card" variants={item} key={refreshVersion}><div className="section-row"><h2>{t('recentEntries')}</h2><button onClick={() => setHistoryOpen(true)}>{t('all')} <ChevronRight size={15}/></button></div>{recent.length ? <div className="recent-list">{recent.map((entry) => <div key={entry.id}><span className="drop-dot"><Droplets size={15}/></span><p>{formatMl(entry.amount, language)} {millilitres} <small>{new Date(entry.createdAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</small></p><button className="mini-delete" onClick={() => remove(entry.id)} aria-label={`${t('delete')} ${formatMl(entry.amount, language)} ${millilitres}`}><Trash2 size={15}/></button></div>)}</div> : <p className="empty-state">{t('firstEntry')}</p>}</motion.section>
-    <AddWaterSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onAdd={add}/><GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><HistorySheet open={historyOpen} entries={intake} onClose={() => setHistoryOpen(false)} onDelete={remove} onClearAll={clearTodayWater}/>
+    <AddWaterSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onAdd={add}/><GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><HistorySheet open={historyOpen} entries={intake} onClose={() => setHistoryOpen(false)} onDelete={remove} onClearAll={clearTodayWater}/><WardrobeSheet open={wardrobeOpen} skin={profile.skin} onClose={() => setWardrobeOpen(false)} onSelect={(skin) => { updateProfile({ skin }); setWardrobeOpen(false) }}/>
     {toast !== null && <motion.div className="success-toast" initial={{ opacity: 0, y: 16, scale: .95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0 }}><span><Droplets size={17}/></span> +{toast} {millilitres} {t('added')}</motion.div>}
   </motion.main>
 }
 
+function HangerIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.3 7.5a2.7 2.7 0 1 1 4.1 2.3c-.9.5-1.4 1.1-1.4 2V13m-7.8 6.2 7.1-5.5a1.1 1.1 0 0 1 1.4 0l7.1 5.5a.8.8 0 0 1-.5 1.4H4.7a.8.8 0 0 1-.5-1.4Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+}
