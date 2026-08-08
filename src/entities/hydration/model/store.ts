@@ -21,6 +21,7 @@ const initialProfile = {
   units: 'ml' as const,
   language: 'ru' as const,
   theme: 'dark' as const,
+  skin: 'male-classic' as const,
 }
 
 const syncUserState = (state: Pick<HydrationState, 'profile' | 'goal' | 'goalMode'>) =>
