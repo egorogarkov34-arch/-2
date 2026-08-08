@@ -28,6 +28,13 @@ const addDays = (date: Date, days: number) => {
   return result
 }
 
+// ISO week: Monday is always the first day and Sunday is the last.
+const startOfWeek = (date: Date) => {
+  const day = startOfDay(date)
+  const daysSinceMonday = (day.getDay() + 6) % 7
+  return addDays(day, -daysSinceMonday)
+}
+
 const getDateRange = (start: Date, end: Date) => {
   const dates: Date[] = []
   for (let current = startOfDay(start); current <= end; current = addDays(current, 1)) {
@@ -44,6 +51,34 @@ function buildAmountByDay(intake: IntakeEntry[]) {
   }, {})
 }
 
+function calculateStreak(amountsByDay: Record<string, number>, goal: number, now: Date) {
+  const today = startOfDay(now)
+  // An unfinished current day must not erase a streak completed through yesterday.
+  let date = (amountsByDay[todayKey(today)] ?? 0) >= goal ? today : addDays(today, -1)
+  let streak = 0
+
+  while ((amountsByDay[todayKey(date)] ?? 0) >= goal) {
+    streak += 1
+    date = addDays(date, -1)
+  }
+
+  return streak
+}
+
+function formatStreak(streak: number, language: 'ru' | 'en') {
+  if (language === 'en') return `${streak} ${streak === 1 ? 'day' : 'days'}`
+  const lastTwoDigits = streak % 100
+  const lastDigit = streak % 10
+  const label = lastTwoDigits >= 11 && lastTwoDigits <= 14
+    ? '\u0434\u043d\u0435\u0439'
+    : lastDigit === 1
+      ? '\u0434\u0435\u043d\u044c'
+      : lastDigit >= 2 && lastDigit <= 4
+        ? '\u0434\u043d\u044f'
+        : '\u0434\u043d\u0435\u0439'
+  return `${streak} ${label}`
+}
+
 function getChartData(
   period: Period,
   amountsByDay: Record<string, number>,
@@ -53,7 +88,8 @@ function getChartData(
   selectedMonth: number,
 ): ChartPoint[] {
   if (period === 'week') {
-    return getDateRange(addDays(now, -6), now).map((date) => ({
+    const monday = startOfWeek(now)
+    return getDateRange(monday, addDays(monday, 6)).map((date) => ({
       label: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date).replace('.', ''),
       amount: amountsByDay[todayKey(date)] ?? 0,
     }))
@@ -73,7 +109,7 @@ function getChartData(
       const amount = getDateRange(weekStart, weekEnd)
         .reduce((total, date) => total + (amountsByDay[todayKey(date)] ?? 0), 0)
 
-      return { label: `${firstDay}–${lastDay}`, amount }
+      return { label: `${firstDay}\u2013${lastDay}`, amount }
     })
   }
 
@@ -91,7 +127,7 @@ function getChartData(
 }
 
 function getActiveDates(period: Period, now: Date, selectedYear: number, selectedMonth: number) {
-  if (period === 'week') return getDateRange(addDays(now, -6), now)
+  if (period === 'week') return getDateRange(startOfWeek(now), now)
   if (period === 'month') {
     const monthEnd = new Date(now.getFullYear(), selectedMonth + 1, 0)
     const endDate = selectedMonth === now.getMonth() ? now : monthEnd
@@ -106,6 +142,7 @@ export default function StatisticsPage() {
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth())
   const intake = useHydrationStore((state) => state.intake)
+  const goal = useHydrationStore((state) => state.goal)
   const { language, t } = useTranslation()
   const locale = language === 'en' ? 'en-US' : 'ru-RU'
   const now = new Date()
@@ -134,8 +171,9 @@ export default function StatisticsPage() {
   const axisUpperBound = max === 0 ? 1000 : Math.max(500, Math.ceil(max / 500) * 500)
   const axisTicks = [0, 1, 2, 3].map((step) => Math.round((axisUpperBound * step) / 3))
   const record = Math.max(0, ...Object.values(amountsByDay))
+  const streak = calculateStreak(amountsByDay, goal, now)
   const cards = [
-    { label: t('streak'), value: total ? `1 ${t('day')}` : `0 ${t('days')}`, icon: Flame, tone: 'orange' },
+    { label: t('streak'), value: formatStreak(streak, language), icon: Flame, tone: 'orange' },
     { label: t('personalRecord'), value: formatVolume(record), icon: Trophy, tone: 'blue' },
   ]
   const periodLabel = t(periods.find((entry) => entry.id === period)?.key ?? 'week')
