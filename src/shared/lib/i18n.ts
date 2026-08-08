@@ -3,6 +3,7 @@ import { useCallback } from 'react'
 
 const copy = {
   ru: {
+    wardrobe: '\u0413\u0430\u0440\u0434\u0435\u0440\u043e\u0431', chooseSkin: '\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u0438\u043b\u0443\u044d\u0442', maleClassic: '\u041c\u0443\u0436\u0441\u043a\u043e\u0439 \u00b7 \u043a\u043b\u0430\u0441\u0441\u0438\u043a\u0430', femaleClassic: '\u0416\u0435\u043d\u0441\u043a\u0438\u0439 \u00b7 \u043a\u043b\u0430\u0441\u0441\u0438\u043a\u0430', maleAthlete: '\u041c\u0443\u0436\u0441\u043a\u043e\u0439 \u00b7 \u0430\u0442\u043b\u0435\u0442',
     home: 'Главная', stats: 'Статистика', profile: 'Профиль', navigation: 'Основная навигация',
     greeting: 'Привет', today: 'Сегодня', refresh: 'Обновляем', pullToRefresh: 'Потяните, чтобы обновить',
     notifications: 'Уведомления', progress: 'Прогресс за сегодня', todayBalance: 'Сегодняшний баланс',
@@ -29,6 +30,7 @@ const copy = {
     errorHint: 'Попробуйте перезапустить приложение.', todayTab: 'Сегодня', week: 'Неделя', month: 'Месяц', year: 'Год'
   },
   en: {
+    wardrobe: 'Wardrobe', chooseSkin: 'Choose a silhouette', maleClassic: 'Male · classic', femaleClassic: 'Female · classic', maleAthlete: 'Male · athlete',
     home: 'Home', stats: 'Insights', profile: 'Profile', navigation: 'Primary navigation',
     greeting: 'Hello', today: 'Today', refresh: 'Refreshing', pullToRefresh: 'Pull to refresh',
     notifications: 'Notifications', progress: 'Today’s progress', todayBalance: 'Today’s balance',
