@@ -44,8 +44,8 @@ h2 { font-size: 17px; letter-spacing: -.025em; margin: 0; }
 .silhouette-base { fill: #15191d; stroke: #314356; stroke-width: 1.5; }
 .head-fill { fill: #15191d; stroke: none; }
 .silhouette-stroke { stroke: #80c4ff; stroke-opacity: .8; stroke-width: 1.45; fill: none; }
-.body-ticks { stroke: #d9edff; stroke-opacity: .28; stroke-width: 1; }
-.body-scale { position: absolute; height: 294px; top: 48px; left: 0; color: #8c949d; font-size: 10px; display: flex; flex-direction: column; justify-content: space-between; }
+.skin-detail { fill: none; stroke: #a7d7ff; stroke-opacity: .28; stroke-width: 1.2; stroke-linecap: round; }
+.body-scale { position: absolute; z-index: 2; width: 116px; height: 276px; top: 55px; left: 0; display: grid; grid-template-rows: repeat(4, 1fr); color: #94a0aa; }.body-scale span { display: grid; grid-template-columns: minmax(0, 1fr) 34px; align-items: center; gap: 8px; }.body-scale b { color: #929da7; font-size: 10px; font-weight: 600; letter-spacing: -.015em; white-space: nowrap; }.body-scale i { display: block; height: 1px; background: #d9edff52; }
 .edit-goal { position: absolute; right: 2px; bottom: 19px; border: 0; padding: 8px 11px; color: #a7c9e8; background: #14365b75; border-radius: 999px; font-size: 11px; display: flex; gap: 5px; align-items: center; backdrop-filter: blur(8px); transition: background .2s; }
 .edit-goal:active { background: #205d9a; }
 .wardrobe-button { position: absolute; top: 18px; right: 2px; width: 39px; height: 39px; display: grid; place-items: center; border: 1px solid #FFFFFF0E; border-radius: 13px; color: #9ed1ff; background: #15365792; box-shadow: inset 0 1px #FFFFFF0C; transition: transform .18s, background .18s; }
