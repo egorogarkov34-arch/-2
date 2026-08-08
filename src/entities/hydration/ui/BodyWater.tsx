@@ -52,7 +52,6 @@ export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-clas
   const hasWater = fillPercentage > 0.01
   const waveSurface = 'M-70 6 C-40 -6 -14 19 18 7 S82 -7 116 7 S182 20 216 6 S281 -7 322 7 S366 19 400 5'
   const waterShape = `${waveSurface} V430 H-70Z`
-  const scaleMarks = [100, 75, 50, 25]
   const label = language === 'en' ? `Body silhouette filled to ${Math.round(percentage)} percent` : `\u0421\u0438\u043b\u0443\u044d\u0442 \u0437\u0430\u043f\u043e\u043b\u043d\u0435\u043d \u0432\u043e\u0434\u043e\u0439 \u043d\u0430 ${Math.round(percentage)} \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u043e\u0432`
   return (
     <div className={`body-water-wrap${compact ? ' is-preview' : ''}`} role="img" aria-label={label}>
@@ -65,7 +64,6 @@ export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-clas
         <g clipPath={`url(#${clipId})`}>{hasWater && <motion.g className="water-level" style={{ willChange: 'transform' }} initial={{ y: 390 }} animate={{ y: level }} transition={{ type: 'spring', stiffness: 32, damping: 18, mass: .9 }}><motion.g className="water-wave" style={{ willChange: 'transform' }} animate={{ x: [-13, 13, -13] }} transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut' }}><path d={waterShape} fill={`url(#${waveId})`}/><path d={waveSurface} stroke="rgba(225,248,255,.92)" strokeWidth="2" fill="none" strokeLinecap="round"/></motion.g></motion.g>}</g>
         <path d={shape.bodyOutline} className="silhouette-stroke"/><path d={shape.headOutline} className="silhouette-stroke"/>{shape.headExtraOutlines?.map((path) => <path d={path} className="silhouette-stroke" key={path}/>)}
       </svg>
-      {!compact && <div className="body-scale">{scaleMarks.map((mark) => <span key={mark}><b>{mark}%</b><i/></span>)}</div>}
     </div>
   )
 })
