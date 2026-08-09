@@ -15,18 +15,18 @@ interface SkinShape {
   headExtraOutlines?: string[]
 }
 
-type BodyExpression = 'sad' | 'calm' | 'happy' | 'joy'
+export type HydrationMood = 'sad' | 'calm' | 'happy' | 'joy'
 
 const maleHeadOutline = 'M119 84C112 78 108 69 108 58C108 40 122 26 140 26C158 26 172 40 172 58C172 69 168 78 161 84'
 
-function getExpression(percentage: number): BodyExpression {
+export function getHydrationMood(percentage: number): HydrationMood {
   if (percentage <= 0.01) return 'sad'
   if (percentage < 50) return 'calm'
   if (percentage < 100) return 'happy'
   return 'joy'
 }
 
-function BodyExpressionFace({ expression }: { expression: BodyExpression }) {
+function BodyExpressionFace({ expression }: { expression: HydrationMood }) {
   const eyes = expression === 'joy'
     ? <><path className="expression-eye" d="M126 58Q130 62 134 58"/><path className="expression-eye" d="M146 58Q150 62 154 58"/></>
     : <><circle className="expression-eye-dot" cx="130" cy="59" r="2"/><circle className="expression-eye-dot" cx="150" cy="59" r="2"/></>
@@ -73,7 +73,7 @@ export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-clas
   const waveId = `water-wave-${uid}`
   const shape = skins[skin]
   const fillPercentage = clamp(percentage, 0, 100)
-  const expression = getExpression(fillPercentage)
+  const expression = getHydrationMood(fillPercentage)
   const level = 390 - 3.9 * fillPercentage
   const hasWater = fillPercentage > 0.01
   const waveSurface = 'M-70 6 C-40 -6 -14 19 18 7 S82 -7 116 7 S182 20 216 6 S281 -7 322 7 S366 19 400 5'
