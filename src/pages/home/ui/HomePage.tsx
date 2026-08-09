@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import { ChevronRight, Droplets, History, Minus, PencilLine, Plus, Trash2 } from 'lucide-react'
 import { useHydrationStore, selectTodayAmount } from '@/entities/hydration/model/store'
-import { BodyWater } from '@/entities/hydration/ui/BodyWater'
+import { BodyWater, getHydrationMood } from '@/entities/hydration/ui/BodyWater'
 import { ProgressRing } from '@/entities/hydration/ui/ProgressRing'
 import { AddWaterSheet } from '@/features/log-water/ui/AddWaterSheet'
 import { GoalSheet } from '@/features/goal/ui/GoalSheet'
@@ -16,6 +16,7 @@ import { useTranslation } from '@/shared/lib/i18n'
 const container: Variants = { hidden: {}, show: { transition: { staggerChildren: .07 } } }
 const item: Variants = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 180, damping: 20 } } }
 const percentageMarks = [100, 75, 50, 25] as const
+const moodKeyByState = { sad: 'moodSad', calm: 'moodCalm', happy: 'moodHappy', joy: 'moodJoy' } as const
 
 export default function HomePage() {
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -32,6 +33,7 @@ export default function HomePage() {
   const today = useHydrationStore(selectTodayAmount)
   const completion = goal > 0 ? Math.round((today / goal) * 100) : 0
   const fillPercentage = clamp(completion, 0, 100)
+  const hydrationMood = getHydrationMood(fillPercentage)
   const remaining = Math.max(goal - today, 0)
   const locale = language === 'en' ? 'en-US' : 'ru-RU'
   const todayDate = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(new Date())
@@ -56,7 +58,7 @@ export default function HomePage() {
     <motion.div className="refresh-indicator" animate={{ y: Math.max(-46, pullDistance - 46), opacity: pullDistance ? 1 : 0 }}><Droplets size={16} className={isRefreshing ? 'is-refreshing' : ''}/><span>{isRefreshing ? t('refresh') : t('pullToRefresh')}</span></motion.div>
     <motion.header className="home-header" variants={item}><div><p className="eyebrow">{t('today')}, {todayDate}</p><h1>{t('greeting')}, {profile.name} <span>✦</span></h1></div></motion.header>
     <motion.section className="goal-overview" variants={item} aria-label={t('progress')}><div className="goal-copy"><p>{t('todayBalance')}</p><strong>{formatMl(today, language)} <small>{millilitres}</small></strong><span>{t('of')} {formatMl(goal, language)} {millilitres}</span></div><ProgressRing value={fillPercentage} label={`${completion}%`} size={96} stroke={8}/></motion.section>
-    <motion.section className="body-section" variants={item}><div className="body-metrics"><span>{t('remaining')}</span><strong>{remaining ? `${formatMl(remaining, language)} ${millilitres}` : t('goalReached')}</strong></div><div className="body-scale" aria-hidden="true">{percentageMarks.map((mark) => <span key={mark}><b>{mark}%</b><i/></span>)}</div><BodyWater percentage={fillPercentage} skin={profile.skin}/><button className="wardrobe-button" onClick={() => { haptic.tap(); setWardrobeOpen(true) }} aria-label={t('wardrobe')}><HangerIcon/></button><button className="edit-goal" onClick={() => { haptic.tap(); setGoalOpen(true) }}><PencilLine size={14}/> {t('goal')} {formatMl(goal, language)} {millilitres}</button></motion.section>
+    <motion.section className="body-section" variants={item}><div className="body-metrics"><span>{t('remaining')}</span><strong>{remaining ? `${formatMl(remaining, language)} ${millilitres}` : t('goalReached')}</strong></div><div className="body-scale" aria-hidden="true">{percentageMarks.map((mark) => <span key={mark}><b>{mark}%</b><i/></span>)}</div><motion.p className={`body-message is-${hydrationMood}`} key={hydrationMood} initial={{ opacity: 0, y: 6, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', stiffness: 240, damping: 22 }}>{t(moodKeyByState[hydrationMood])}</motion.p><BodyWater percentage={fillPercentage} skin={profile.skin}/><button className="wardrobe-button" onClick={() => { haptic.tap(); setWardrobeOpen(true) }} aria-label={t('wardrobe')}><HangerIcon/></button><button className="edit-goal" onClick={() => { haptic.tap(); setGoalOpen(true) }}><PencilLine size={14}/> {t('goal')} {formatMl(goal, language)} {millilitres}</button></motion.section>
     <motion.section className="quick-actions" variants={item}><motion.button className="add-water-button" onClick={() => { haptic.tap(); setSheetOpen(true) }} whileTap={{ scale: .98 }}><span className="add-icon"><Plus size={24}/></span><span><b>{t('addWater')}</b><small>{t('createEntry')}</small></span><Droplets size={21}/></motion.button><button className="history-button" onClick={() => setHistoryOpen(true)} aria-label={t('history')}><History size={20}/></button></motion.section>
     <motion.form className="home-custom-entry" variants={item} onSubmit={(event) => { event.preventDefault(); submitCustomAmount() }}>
       <label htmlFor="home-custom-amount">{t('customAmount')}</label>
