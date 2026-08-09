@@ -3,7 +3,7 @@ import { useCallback } from 'react'
 
 const copy = {
   ru: {
-    wardrobe: '\u0413\u0430\u0440\u0434\u0435\u0440\u043e\u0431', chooseSkin: '\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u0438\u043b\u0443\u044d\u0442', maleClassic: '\u041c\u0443\u0436\u0441\u043a\u043e\u0439 \u00b7 \u043a\u043b\u0430\u0441\u0441\u0438\u043a\u0430', femaleClassic: '\u0416\u0435\u043d\u0441\u043a\u0438\u0439 \u00b7 \u043a\u043b\u0430\u0441\u0441\u0438\u043a\u0430', maleAthlete: '\u041c\u0443\u0436\u0441\u043a\u043e\u0439 \u00b7 \u0430\u0442\u043b\u0435\u0442',
+    wardrobe: '\u0413\u0430\u0440\u0434\u0435\u0440\u043e\u0431', chooseSkin: '\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u0438\u043b\u0443\u044d\u0442', maleClassic: '\u041c\u0443\u0436\u0441\u043a\u043e\u0439 \u00b7 \u043a\u043b\u0430\u0441\u0441\u0438\u043a\u0430', femaleClassic: '\u0416\u0435\u043d\u0441\u043a\u0438\u0439 \u00b7 \u043a\u043b\u0430\u0441\u0441\u0438\u043a\u0430', maleAthlete: '\u041c\u0443\u0436\u0441\u043a\u043e\u0439 \u00b7 \u0430\u0442\u043b\u0435\u0442', moodSad: '\u041c\u043d\u0435 \u0433\u0440\u0443\u0441\u0442\u043d\u043e \u0431\u0435\u0437 \u0432\u043e\u0434\u044b', moodCalm: '\u041f\u0430\u0440\u0430 \u0433\u043b\u043e\u0442\u043a\u043e\u0432 \u2014 \u0438 \u0441\u0442\u0430\u043d\u0435\u0442 \u043b\u0443\u0447\u0448\u0435', moodHappy: '\u041c\u043d\u0435 \u0443\u0436\u0435 \u0445\u043e\u0440\u043e\u0448\u043e!', moodJoy: '\u042f \u0432 \u043e\u0442\u043b\u0438\u0447\u043d\u043e\u0439 \u0444\u043e\u0440\u043c\u0435!',
     home: 'Главная', stats: 'Статистика', profile: 'Профиль', navigation: 'Основная навигация',
     greeting: 'Привет', today: 'Сегодня', refresh: 'Обновляем', pullToRefresh: 'Потяните, чтобы обновить',
     notifications: 'Уведомления', progress: 'Прогресс за сегодня', todayBalance: 'Сегодняшний баланс',
@@ -30,7 +30,7 @@ const copy = {
     errorHint: 'Попробуйте перезапустить приложение.', todayTab: 'Сегодня', week: 'Неделя', month: 'Месяц', year: 'Год'
   },
   en: {
-    wardrobe: 'Wardrobe', chooseSkin: 'Choose a silhouette', maleClassic: 'Male · classic', femaleClassic: 'Female · classic', maleAthlete: 'Male · athlete',
+    wardrobe: 'Wardrobe', chooseSkin: 'Choose a silhouette', maleClassic: 'Male · classic', femaleClassic: 'Female · classic', maleAthlete: 'Male · athlete', moodSad: 'I feel sad without water', moodCalm: 'A few sips will help', moodHappy: 'I feel good already!', moodJoy: 'I feel amazing!',
     home: 'Home', stats: 'Insights', profile: 'Profile', navigation: 'Primary navigation',
     greeting: 'Hello', today: 'Today', refresh: 'Refreshing', pullToRefresh: 'Pull to refresh',
     notifications: 'Notifications', progress: 'Today’s progress', todayBalance: 'Today’s balance',
