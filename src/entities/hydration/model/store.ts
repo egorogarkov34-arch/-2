@@ -24,8 +24,8 @@ const initialProfile = {
   skin: 'male-classic' as const,
 }
 
-const syncUserState = (state: Pick<HydrationState, 'profile' | 'goal' | 'goalMode'>) =>
-  syncToCloud(cloudUserStateKey, { profile: state.profile, goal: state.goal, goalMode: state.goalMode } satisfies StoredUserState)
+const syncUserState = (state: Pick<HydrationState, 'profile' | 'goal' | 'goalMode' | 'dayGoals'>) =>
+  syncToCloud(cloudUserStateKey, { profile: state.profile, goal: state.goal, goalMode: state.goalMode, dayGoals: state.dayGoals } satisfies StoredUserState)
 
 function changesHydrationNeed(profile: Partial<HydrationState['profile']>) {
   return hydrationProfileFields.some((field) => field in profile)
@@ -38,13 +38,16 @@ export const useHydrationStore = create<HydrationState>()(
       goal: calculateWaterGoal(initialProfile),
       goalMode: 'auto',
       intake: [],
+      dayGoals: {},
       profile: initialProfile,
       setActiveTab: (activeTab) => set({ activeTab }),
       addWater: (amount) =>
         set((state) => {
           const intake = [...state.intake, { id: crypto.randomUUID(), amount, createdAt: new Date().toISOString() }]
+          const dayGoals = { ...state.dayGoals, [todayKey()]: state.goal }
           syncToCloud('aquora:intake', intake)
-          return { intake }
+          syncUserState({ ...state, dayGoals })
+          return { intake, dayGoals }
         }),
       removeWater: (id) =>
         set((state) => {
@@ -67,22 +70,23 @@ export const useHydrationStore = create<HydrationState>()(
         }),
       setGoal: (goal) =>
         set((state) => {
-          const next = { goal, goalMode: 'custom' as const }
+          const next = { goal, goalMode: 'custom' as const, dayGoals: { ...state.dayGoals, [todayKey()]: goal } }
           syncUserState({ ...state, ...next })
           return next
         }),
       setAutomaticGoal: (goal) =>
         set((state) => {
           if (state.goalMode !== 'auto') return {}
-          const next = { goal }
+          const next = { goal, dayGoals: { ...state.dayGoals, [todayKey()]: goal } }
           syncUserState({ ...state, ...next })
           return next
         }),
       updateProfile: (profile) =>
         set((state) => {
           const nextProfile = { ...state.profile, ...profile }
+          const automaticGoal = calculateWaterGoal(nextProfile)
           const next = changesHydrationNeed(profile)
-            ? { profile: nextProfile, goal: calculateWaterGoal(nextProfile), goalMode: 'auto' as const }
+            ? { profile: nextProfile, goal: automaticGoal, goalMode: 'auto' as const, dayGoals: { ...state.dayGoals, [todayKey()]: automaticGoal } }
             : { profile: nextProfile }
           syncUserState({ ...state, ...next })
           return next
@@ -92,7 +96,7 @@ export const useHydrationStore = create<HydrationState>()(
           const profile = { ...initialProfile, ...state.profile, ...stored.profile }
           const goalMode = stored.goalMode === 'custom' ? 'custom' : 'auto'
           const storedGoal = typeof stored.goal === 'number' && stored.goal >= 500 && stored.goal <= 10_000 ? stored.goal : state.goal
-          return { profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode }
+          return { profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode, dayGoals: { ...state.dayGoals, ...stored.dayGoals } }
         }),
     }),
     {
@@ -102,7 +106,7 @@ export const useHydrationStore = create<HydrationState>()(
         const profile = { ...initialProfile, ...persisted.profile }
         const goalMode = persisted.goalMode === 'custom' ? 'custom' : 'auto'
         const storedGoal = typeof persisted.goal === 'number' && persisted.goal >= 500 && persisted.goal <= 10_000 ? persisted.goal : currentState.goal
-        return { ...currentState, ...persisted, profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode }
+        return { ...currentState, ...persisted, profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode, dayGoals: { ...currentState.dayGoals, ...persisted.dayGoals } }
       },
     },
   ),
