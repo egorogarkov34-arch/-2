@@ -27,7 +27,7 @@ export function App() {
       if (!active) return
       if (stored) { restoreUserState(stored); return }
       const current = useHydrationStore.getState()
-      syncToCloud('aquora:user-state', { profile: current.profile, goal: current.goal, goalMode: current.goalMode } satisfies StoredUserState)
+      syncToCloud('aquora:user-state', { profile: current.profile, goal: current.goal, goalMode: current.goalMode, dayGoals: current.dayGoals } satisfies StoredUserState)
     })
     const frame = requestAnimationFrame(() => setReady(true))
     return () => { active = false; cancelAnimationFrame(frame) }
