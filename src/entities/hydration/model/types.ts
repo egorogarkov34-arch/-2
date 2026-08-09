@@ -12,6 +12,7 @@ export interface StoredUserState {
   profile: Profile
   goal: number
   goalMode: 'auto' | 'custom'
+  dayGoals?: Record<string, number>
 }
 
 export interface Profile {
@@ -32,6 +33,7 @@ export interface HydrationState {
   goal: number
   goalMode: 'auto' | 'custom'
   intake: IntakeEntry[]
+  dayGoals: Record<string, number>
   profile: Profile
   setActiveTab: (tab: HydrationState['activeTab']) => void
   addWater: (amount: number) => void
