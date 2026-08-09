@@ -51,13 +51,18 @@ function buildAmountByDay(intake: IntakeEntry[]) {
   }, {})
 }
 
-function calculateStreak(amountsByDay: Record<string, number>, goal: number, now: Date) {
+function calculateStreak(amountsByDay: Record<string, number>, dayGoals: Record<string, number>, fallbackGoal: number, now: Date) {
   const today = startOfDay(now)
+  const reachedGoal = (date: Date) => {
+    const key = todayKey(date)
+    const goal = dayGoals[key] ?? fallbackGoal
+    return goal > 0 && (amountsByDay[key] ?? 0) >= goal
+  }
   // An unfinished current day must not erase a streak completed through yesterday.
-  let date = (amountsByDay[todayKey(today)] ?? 0) >= goal ? today : addDays(today, -1)
+  let date = reachedGoal(today) ? today : addDays(today, -1)
   let streak = 0
 
-  while ((amountsByDay[todayKey(date)] ?? 0) >= goal) {
+  while (reachedGoal(date)) {
     streak += 1
     date = addDays(date, -1)
   }
@@ -143,6 +148,7 @@ export default function StatisticsPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth())
   const intake = useHydrationStore((state) => state.intake)
   const goal = useHydrationStore((state) => state.goal)
+  const dayGoals = useHydrationStore((state) => state.dayGoals)
   const { language, t } = useTranslation()
   const locale = language === 'en' ? 'en-US' : 'ru-RU'
   const now = new Date()
@@ -171,7 +177,7 @@ export default function StatisticsPage() {
   const axisUpperBound = max === 0 ? 1000 : Math.max(500, Math.ceil(max / 500) * 500)
   const axisTicks = [0, 1, 2, 3].map((step) => Math.round((axisUpperBound * step) / 3))
   const record = Math.max(0, ...Object.values(amountsByDay))
-  const streak = calculateStreak(amountsByDay, goal, now)
+  const streak = calculateStreak(amountsByDay, dayGoals, goal, now)
   const cards = [
     { label: t('streak'), value: formatStreak(streak, language), icon: Flame, tone: 'orange' },
     { label: t('personalRecord'), value: formatVolume(record), icon: Trophy, tone: 'blue' },
