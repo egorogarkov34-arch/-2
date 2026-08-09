@@ -15,7 +15,32 @@ interface SkinShape {
   headExtraOutlines?: string[]
 }
 
+type BodyExpression = 'sad' | 'calm' | 'happy' | 'joy'
+
 const maleHeadOutline = 'M119 84C112 78 108 69 108 58C108 40 122 26 140 26C158 26 172 40 172 58C172 69 168 78 161 84'
+
+function getExpression(percentage: number): BodyExpression {
+  if (percentage <= 0.01) return 'sad'
+  if (percentage < 50) return 'calm'
+  if (percentage < 100) return 'happy'
+  return 'joy'
+}
+
+function BodyExpressionFace({ expression }: { expression: BodyExpression }) {
+  const eyes = expression === 'joy'
+    ? <><path className="expression-eye" d="M126 58Q130 62 134 58"/><path className="expression-eye" d="M146 58Q150 62 154 58"/></>
+    : <><circle className="expression-eye-dot" cx="130" cy="59" r="2"/><circle className="expression-eye-dot" cx="150" cy="59" r="2"/></>
+
+  const mouth = expression === 'sad'
+    ? <path className="expression-mouth" d="M132 74Q140 67 148 74"/>
+    : expression === 'calm'
+      ? <path className="expression-mouth" d="M133 72H147"/>
+      : expression === 'happy'
+        ? <path className="expression-mouth" d="M132 69Q140 78 148 69"/>
+        : <path className="expression-mouth expression-mouth-open" d="M130 68Q140 82 150 68Q140 76 130 68Z"/>
+
+  return <motion.g className={`body-expression is-${expression}`} initial={{ opacity: 0, y: 2 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .24, ease: 'easeOut' }} key={expression}>{eyes}{mouth}</motion.g>
+}
 
 const skins: Record<BodySkin, SkinShape> = {
   'male-classic': {
@@ -48,6 +73,7 @@ export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-clas
   const waveId = `water-wave-${uid}`
   const shape = skins[skin]
   const fillPercentage = clamp(percentage, 0, 100)
+  const expression = getExpression(fillPercentage)
   const level = 390 - 3.9 * fillPercentage
   const hasWater = fillPercentage > 0.01
   const waveSurface = 'M-70 6 C-40 -6 -14 19 18 7 S82 -7 116 7 S182 20 216 6 S281 -7 322 7 S366 19 400 5'
@@ -63,6 +89,7 @@ export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-clas
         <path d={shape.bodyPath} className="silhouette-base"/><path d={shape.headPath} className="head-fill"/>{shape.headExtras?.map((path) => <path d={path} className="head-fill" key={path}/>)}
         <g clipPath={`url(#${clipId})`}>{hasWater && <motion.g className="water-level" style={{ willChange: 'transform' }} initial={{ y: 390 }} animate={{ y: level }} transition={{ type: 'spring', stiffness: 32, damping: 18, mass: .9 }}><motion.g className="water-wave" style={{ willChange: 'transform' }} animate={{ x: [-13, 13, -13] }} transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut' }}><path d={waterShape} fill={`url(#${waveId})`}/><path d={waveSurface} stroke="rgba(225,248,255,.92)" strokeWidth="2" fill="none" strokeLinecap="round"/></motion.g></motion.g>}</g>
         <path d={shape.bodyOutline} className="silhouette-stroke"/><path d={shape.headOutline} className="silhouette-stroke"/>{shape.headExtraOutlines?.map((path) => <path d={path} className="silhouette-stroke" key={path}/>)}
+        {!compact && <BodyExpressionFace expression={expression}/>} 
       </svg>
     </div>
   )
