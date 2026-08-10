@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Activity, BellRing, Crown, LockKeyhole, RefreshCw, ShieldCheck, Trash2, UserPlus, UsersRound } from 'lucide-react'
+import { Activity, Ban, BellRing, Crown, LockKeyhole, Megaphone, RefreshCw, Send, ShieldCheck, Trash2, Unlock, UserPlus, UsersRound } from 'lucide-react'
 import { getTelegramInitData, haptic } from '@/shared/lib/telegram'
 
 type AdminRole = 'owner' | 'admin'
@@ -14,11 +14,13 @@ interface DashboardUser {
   todayAmount: number
   progress: number
   remindersEnabled: boolean
+  blocked: boolean
   updatedAt: number
   lastReminderAt: number | null
 }
 
 interface DashboardAdmin { id: number; role: AdminRole; name: string }
+interface BroadcastResult { ok: true; sent: number; failed: number; recipients: number }
 
 interface DashboardData {
   ok: true
@@ -81,6 +83,10 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null)
   const [adminId, setAdminId] = useState('')
   const [updatingRole, setUpdatingRole] = useState<number | null>(null)
+  const [updatingAccess, setUpdatingAccess] = useState<number | null>(null)
+  const [broadcastText, setBroadcastText] = useState('')
+  const [broadcastResult, setBroadcastResult] = useState<string | null>(null)
+  const [sendingBroadcast, setSendingBroadcast] = useState(false)
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -109,6 +115,39 @@ export default function AdminPage() {
     } finally { setUpdatingRole(null) }
   }
 
+  const updateUserAccess = async (action: 'block' | 'unblock', id: number) => {
+    if (!Number.isSafeInteger(id) || id <= 0) { haptic.error(); return }
+    const actionText = action === 'block' ? 'заблокировать' : 'разблокировать'
+    if (!window.confirm(`Точно ${actionText} этого пользователя?`)) return
+    setUpdatingAccess(id)
+    try {
+      const next = await requestAdmin<DashboardData>('/api/admin/users/access', { action, userId: id })
+      setData(next)
+      haptic.success()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'request_failed')
+      haptic.error()
+    } finally { setUpdatingAccess(null) }
+  }
+
+  const sendBroadcast = async () => {
+    const message = broadcastText.trim()
+    if (!message) { haptic.error(); return }
+    if (!window.confirm('Отправить это сообщение всем активным пользователям?')) return
+    setSendingBroadcast(true)
+    setBroadcastResult(null)
+    try {
+      const result = await requestAdmin<BroadcastResult>('/api/admin/broadcast', { message })
+      setBroadcastText('')
+      setBroadcastResult(`Отправлено: ${result.sent}. Не доставлено: ${result.failed}.`)
+      haptic.success()
+      void load(true)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'request_failed')
+      haptic.error()
+    } finally { setSendingBroadcast(false) }
+  }
+
   if (loading && !data) return <main className="page admin-page"><div className="admin-loading"><div className="skeleton title"/><div className="admin-skeleton-grid"><div className="skeleton"/><div className="skeleton"/><div className="skeleton"/></div><div className="skeleton admin-skeleton-list"/></div></main>
   if (error && !data) return <AccessDenied reason={error}/>
   if (!data) return null
@@ -129,6 +168,15 @@ export default function AdminPage() {
       <article className="admin-metric-card"><span className="admin-metric-icon"><BellRing size={17}/></span><small>Напоминания</small><strong>{number.format(metrics.remindersEnabled)}</strong><p>{number.format(metrics.goalsReachedToday)} целей выполнено</p></article>
     </section>
 
+    {isOwner && <section className="admin-section">
+      <div className="admin-section-heading"><div><p className="eyebrow">Owner tools</p><h2>Рассылка</h2></div><Megaphone size={18}/></div>
+      <form className="admin-broadcast-card" onSubmit={(event) => { event.preventDefault(); void sendBroadcast() }}>
+        <textarea value={broadcastText} onChange={(event) => setBroadcastText(event.target.value.slice(0, 1000))} maxLength={1000} placeholder="Текст сообщения для пользователей" aria-label="Текст рассылки" />
+        <div className="admin-broadcast-footer"><span>{broadcastText.length} / 1000</span><button type="submit" disabled={!broadcastText.trim() || sendingBroadcast}>{<Send size={16}/>} {sendingBroadcast ? 'Отправляем…' : 'Отправить всем'}</button></div>
+        {broadcastResult && <p className="admin-broadcast-result">{broadcastResult}</p>}
+      </form>
+    </section>}
+
     <section className="admin-section">
       <div className="admin-section-heading"><div><p className="eyebrow">Live overview</p><h2>Пользователи</h2></div><span>{number.format(metrics.totalUsers)}</span></div>
       <div className="admin-users-card">
@@ -136,6 +184,7 @@ export default function AdminPage() {
           <div className="admin-user-avatar">{user.name.slice(0, 1).toUpperCase()}</div>
           <div className="admin-user-copy"><strong>{user.name}</strong><small>{activityLabel[user.activity]} активность · {user.language.toUpperCase()} · {updatedAt(user.updatedAt)}</small><div className="admin-progress"><i style={{ width: `${Math.min(100, user.progress)}%` }}/></div></div>
           <div className="admin-user-value"><strong>{formatMl(user.todayAmount)}</strong><small>из {formatMl(user.goal)}</small><span className={user.remindersEnabled ? 'is-on' : ''}>{user.remindersEnabled ? 'Напоминания' : 'Без напоминаний'}</span></div>
+          {isOwner && <button type="button" className={`admin-user-access ${user.blocked ? 'unblock' : ''}`} aria-label={`${user.blocked ? 'Разблокировать' : 'Заблокировать'} ${user.name}`} onClick={() => void updateUserAccess(user.blocked ? 'unblock' : 'block', user.id)} disabled={updatingAccess === user.id}>{user.blocked ? <Unlock size={15}/> : <Ban size={15}/>}<span>{user.blocked ? 'Разблокировать' : 'Заблокировать'}</span></button>}
         </article>)}
       </div>
     </section>
