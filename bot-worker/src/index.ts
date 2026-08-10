@@ -59,7 +59,7 @@ interface ReminderStatePayload {
 
 interface AdminGrant {
   userId: number
-  role: 'admin'
+  role: AdminRole
   addedAt: number
   addedBy: number
 }
@@ -198,13 +198,13 @@ async function readAdminGrant(env: Env, userId: number) {
   if (!env.AQUORA_USERS) return null
   try {
     const value = await env.AQUORA_USERS.get<AdminGrant>(adminKey(userId), 'json')
-    return value?.role === 'admin' && value.userId === userId ? value : null
+    return (value?.role === 'owner' || value?.role === 'admin') && value.userId === userId ? value : null
   } catch (error) { console.error('Admin role read failed', error); return null }
 }
 
 async function adminRole(env: Env, userId: number): Promise<AdminRole | null> {
   if (configuredOwnerId(env) === userId) return 'owner'
-  return await readAdminGrant(env, userId) ? 'admin' : null
+  return (await readAdminGrant(env, userId))?.role ?? null
 }
 
 function isAdminRequest(value: unknown): value is AdminRequestPayload {
@@ -268,7 +268,7 @@ async function readAdminGrants(env: Env) {
   do {
     const page = await env.AQUORA_USERS.list({ prefix: 'admin:', cursor, limit: 1_000 })
     const batch = await Promise.all(page.keys.map((key) => env.AQUORA_USERS?.get<AdminGrant>(key.name, 'json')))
-    for (const grant of batch) if (grant?.role === 'admin' && Number.isSafeInteger(grant.userId)) grants.push(grant)
+    for (const grant of batch) if ((grant?.role === 'owner' || grant?.role === 'admin') && Number.isSafeInteger(grant.userId)) grants.push(grant)
     cursor = page.list_complete ? undefined : page.cursor
   } while (cursor)
   return grants
@@ -283,7 +283,7 @@ async function dashboardPayload(env: Env, role: AdminRole) {
   const recordsById = new Map(records.map((record) => [record.userId, record]))
   const admins = [
     ...(ownerId ? [{ id: ownerId, role: 'owner' as const, name: recordsById.get(ownerId)?.profile?.name || `Owner #${ownerId}` }] : []),
-    ...grants.filter((grant) => grant.userId !== ownerId).map((grant) => ({ id: grant.userId, role: 'admin' as const, name: recordsById.get(grant.userId)?.profile?.name || `Admin #${grant.userId}` })),
+    ...grants.filter((grant) => grant.userId !== ownerId).map((grant) => ({ id: grant.userId, role: grant.role, name: recordsById.get(grant.userId)?.profile?.name || `${grant.role === 'owner' ? 'Owner' : 'Admin'} #${grant.userId}` })),
   ]
   return {
     ok: true,
