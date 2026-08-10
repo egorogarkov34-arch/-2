@@ -10,11 +10,13 @@ import { initializeTelegram, loadFromCloud, syncToCloud, telegram } from '@/shar
 const HomePage = lazy(() => import('@/pages/home/ui/HomePage'))
 const StatisticsPage = lazy(() => import('@/pages/statistics/ui/StatisticsPage'))
 const ProfilePage = lazy(() => import('@/pages/profile/ui/ProfilePage'))
+const AdminPage = lazy(() => import('@/pages/admin/ui/AdminPage'))
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false } } })
 
 function PageFallback() { return <main className="page skeleton-page"><div className="skeleton title"/><div className="skeleton hero"/><div className="skeleton button"/></main> }
 
 export function App() {
+  const isAdminMode = new URLSearchParams(window.location.search).get('admin') === '1'
   const activeTab = useHydrationStore((state) => state.activeTab)
   const language = useHydrationStore((state) => state.profile.language)
   const restoreUserState = useHydrationStore((state) => state.restoreUserState)
@@ -36,6 +38,7 @@ export function App() {
     document.body.dataset.theme = 'dark'
     document.documentElement.lang = language
   }, [language])
-  const page = activeTab === 'home' ? <HomePage/> : activeTab === 'stats' ? <StatisticsPage/> : <ProfilePage/>
-  return <QueryClientProvider client={queryClient}><ErrorBoundary><div className={`app-shell ${ready ? 'is-ready' : ''}`}><Suspense fallback={<PageFallback/>}><AnimatePresence mode="wait"><motion.div key={activeTab} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: .18 }}>{page}</motion.div></AnimatePresence></Suspense><BottomNavigation/></div></ErrorBoundary></QueryClientProvider>
+  const page = isAdminMode ? <AdminPage/> : activeTab === 'home' ? <HomePage/> : activeTab === 'stats' ? <StatisticsPage/> : <ProfilePage/>
+  const pageKey = isAdminMode ? 'admin' : activeTab
+  return <QueryClientProvider client={queryClient}><ErrorBoundary><div className={`app-shell ${ready ? 'is-ready' : ''}`}><Suspense fallback={<PageFallback/>}><AnimatePresence mode="wait"><motion.div key={pageKey} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: .18 }}>{page}</motion.div></AnimatePresence></Suspense>{!isAdminMode && <BottomNavigation/>}</div></ErrorBoundary></QueryClientProvider>
 }
