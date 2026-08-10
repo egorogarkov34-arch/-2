@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { BellRing, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Droplets, Globe2, MoonStar, Ruler, Scale, UserRound, X } from 'lucide-react'
+import { BellRing, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Droplets, Globe2, Ruler, Scale, UserRound, X } from 'lucide-react'
 import { useHydrationStore } from '@/entities/hydration/model/store'
 import type { ReminderInterval } from '@/entities/hydration/model/types'
 import { haptic } from '@/shared/lib/telegram'
@@ -10,7 +10,7 @@ import { GoalSheet } from '@/features/goal/ui/GoalSheet'
 import { useTranslation, type TranslationKey } from '@/shared/lib/i18n'
 import { calculateWaterGoal } from '@/entities/hydration/model/calculateGoal'
 
-type RowId = 'theme' | 'language' | 'reminders' | 'reminderFrequency'
+type RowId = 'language' | 'reminders' | 'reminderFrequency'
 interface SettingRow { id?: RowId; field?: EditableProfileField; icon: typeof UserRound; label: string; value?: string; action?: 'toggle' | 'chevron'; disabled?: boolean }
 
 const reminderFrequencyOptions: Array<{ value: ReminderInterval; label: TranslationKey }> = [
@@ -32,7 +32,6 @@ export default function ProfilePage() {
   const activityName = profile.activity === 'moderate' ? t('moderate') : profile.activity === 'high' ? t('high') : t('low')
   const genderName = profile.gender === 'male' ? t('male') : profile.gender === 'female' ? t('female') : t('other')
   const goalInLitres = (goal / 1000).toLocaleString(language === 'en' ? 'en-US' : 'ru-RU', { maximumFractionDigits: 1 })
-  const toggleTheme = () => updateProfile({ theme: profile.theme === 'dark' ? 'light' : 'dark' })
   const toggleLanguage = () => updateProfile({ language: profile.language === 'ru' ? 'en' : 'ru' })
   const toggleReminders = () => updateProfile({ reminders: { ...profile.reminders, enabled: !profile.reminders.enabled } })
   const reminderFrequency = profile.reminders.intervalMinutes === 30 ? t('every30Minutes') : profile.reminders.intervalMinutes === 60 ? t('everyHour') : profile.reminders.intervalMinutes === 180 ? t('every3Hours') : t('every2Hours')
@@ -44,16 +43,15 @@ export default function ProfilePage() {
   const preferences: SettingRow[] = [
     { id: 'reminders', icon: BellRing, label: t('reminders'), value: profile.reminders.enabled ? t('enabled') : t('disabled'), action: 'toggle' },
     { id: 'reminderFrequency', icon: Clock3, label: t('reminderFrequency'), value: reminderFrequency, disabled: !profile.reminders.enabled },
-    { id: 'theme', icon: MoonStar, label: t('darkTheme'), value: profile.theme === 'dark' ? t('enabled') : t('disabled'), action: 'toggle' },
     { id: 'language', icon: Globe2, label: t('language'), value: profile.language === 'ru' ? t('russian') : 'English' }
   ]
-  const preferenceAction = (id: RowId | undefined) => id === 'theme' ? toggleTheme : id === 'reminders' ? toggleReminders : undefined
+  const preferenceAction = (id: RowId | undefined) => id === 'reminders' ? toggleReminders : undefined
   const preferenceClick = (id: RowId | undefined) => id === 'language' ? toggleLanguage : id === 'reminderFrequency' ? () => { haptic.tap(); setReminderFrequencyOpen(true) } : haptic.tap
   return <main className="page profile-page"><header className="page-header"><div><p className="eyebrow">{t('personalSpace')}</p><h1>{t('profile')}</h1></div><div className="avatar">{profile.name.replace('@', '').slice(0, 1).toUpperCase()}</div></header>
     <section className="profile-summary"><div className="profile-orb"><Droplets size={25}/></div><div><strong>{goalInLitres} {t('litres')} {t('perDay')}</strong><p>{t('goalSummaryHint')}</p></div></section>
     <SettingsGroup title={t('personalData')} rows={personal} onClick={setEditingField}/>
     <section className="settings-section"><h2>{t('goalAndActivity')}</h2><div className="settings-card"><Setting icon={Droplets} label={t('goal')} value={`${goal} ${t('millilitres')}`} onClick={() => setGoalOpen(true)}/><Setting icon={CircleHelp} label={t('activity')} value={activityName} onClick={() => setEditingField('activity')}/></div></section>
-    <section className="settings-section"><h2>{t('settings')}</h2><div className="settings-card">{preferences.map((row) => <Setting key={row.id} {...row} toggleValue={row.id === 'reminders' ? profile.reminders.enabled : profile.theme === 'dark'} onToggle={preferenceAction(row.id)} onClick={preferenceClick(row.id)}/>)}</div></section>
+    <section className="settings-section"><h2>{t('settings')}</h2><div className="settings-card">{preferences.map((row) => <Setting key={row.id} {...row} toggleValue={row.id === 'reminders' ? profile.reminders.enabled : undefined} onToggle={preferenceAction(row.id)} onClick={preferenceClick(row.id)}/>)}</div></section>
     <GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><ReminderFrequencySheet open={reminderFrequencyOpen} interval={profile.reminders.intervalMinutes} onClose={() => setReminderFrequencyOpen(false)} onSave={(interval) => updateProfile({ reminders: { ...profile.reminders, intervalMinutes: interval } })}/><EditProfileFieldSheet open={editingField !== null} field={editingField} profile={profile} onClose={() => setEditingField(null)} onSave={updateProfile}/>
   </main>
 }
