@@ -1,3 +1,6 @@
+import type { IntakeEntry, Profile } from '@/entities/hydration/model/types'
+import { todayKey } from '@/shared/lib/format'
+
 export const telegram = () => window.Telegram?.WebApp
 
 export const getTelegramInitData = () => {
@@ -46,3 +49,39 @@ export const loadFromCloud = <T>(key: string): Promise<T | null> => new Promise(
     try { resolve(JSON.parse(value) as T) } catch { resolve(null) }
   })
 })
+
+interface ReminderSyncState {
+  profile: Profile
+  goal: number
+  intake: IntakeEntry[]
+}
+
+const reminderApiUrl = () => {
+  const configuredUrl = import.meta.env.VITE_AQUORA_BOT_URL as string | undefined
+  return configuredUrl?.replace(/\/+$/, '')
+}
+
+/** Mirrors only the data required for a bot reminder. The Worker validates initData before accepting it. */
+export const syncReminderState = ({ profile, goal, intake }: ReminderSyncState) => {
+  const apiUrl = reminderApiUrl()
+  const initData = getTelegramInitData()
+  if (!apiUrl || !initData) return
+
+  const dateKey = todayKey()
+  const todayAmount = intake
+    .filter((entry) => todayKey(new Date(entry.createdAt)) === dateKey)
+    .reduce((sum, entry) => sum + entry.amount, 0)
+
+  void fetch(`${apiUrl}/api/reminder-state`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      initData,
+      dateKey,
+      goal,
+      todayAmount,
+      language: profile.language,
+      reminders: profile.reminders,
+    }),
+  }).catch(() => undefined)
+}
