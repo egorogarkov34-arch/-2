@@ -6,7 +6,6 @@ import type { ReminderInterval } from '@/entities/hydration/model/types'
 import { haptic } from '@/shared/lib/telegram'
 import { useGoalRecommendation } from '@/entities/hydration/model/useGoalRecommendation'
 import { EditProfileFieldSheet, type EditableProfileField } from '@/features/profile/ui/EditProfileFieldSheet'
-import { GoalSheet } from '@/features/goal/ui/GoalSheet'
 import { useTranslation, type TranslationKey } from '@/shared/lib/i18n'
 import { calculateWaterGoal } from '@/entities/hydration/model/calculateGoal'
 
@@ -21,11 +20,10 @@ const reminderFrequencyOptions: Array<{ value: ReminderInterval; label: Translat
 ]
 
 export default function ProfilePage() {
-  const { profile, updateProfile, goal, setAutomaticGoal, setGoal } = useHydrationStore()
+  const { profile, updateProfile, goal, setAutomaticGoal } = useHydrationStore()
   const { language, t } = useTranslation()
   const recommendation = useGoalRecommendation(profile)
   const [editingField, setEditingField] = useState<EditableProfileField | null>(null)
-  const [goalOpen, setGoalOpen] = useState(false)
   const [reminderFrequencyOpen, setReminderFrequencyOpen] = useState(false)
   const recommendedGoal = recommendation.data?.value ?? calculateWaterGoal(profile)
   useEffect(() => { setAutomaticGoal(recommendedGoal) }, [recommendedGoal, setAutomaticGoal])
@@ -38,7 +36,7 @@ export default function ProfilePage() {
   const personal: SettingRow[] = [
     { field: 'name', icon: UserRound, label: t('name'), value: profile.name }, { field: 'gender', icon: Droplets, label: t('gender'), value: genderName },
     { field: 'age', icon: CalendarDays, label: t('age'), value: `${profile.age} ${t('years')}` }, { field: 'weight', icon: Scale, label: t('weight'), value: `${profile.weight} kg` },
-    { field: 'height', icon: Ruler, label: t('height'), value: `${profile.height} cm` }
+    { field: 'height', icon: Ruler, label: t('height'), value: `${profile.height} cm` }, { field: 'activity', icon: CircleHelp, label: t('activity'), value: activityName }
   ]
   const preferences: SettingRow[] = [
     { id: 'reminders', icon: BellRing, label: t('reminders'), value: profile.reminders.enabled ? t('enabled') : t('disabled'), action: 'toggle' },
@@ -50,9 +48,8 @@ export default function ProfilePage() {
   return <main className="page profile-page"><header className="page-header"><div><p className="eyebrow">{t('personalSpace')}</p><h1>{t('profile')}</h1></div><div className="avatar">{profile.name.replace('@', '').slice(0, 1).toUpperCase()}</div></header>
     <section className="profile-summary"><div className="profile-orb"><Droplets size={25}/></div><div><strong>{goalInLitres} {t('litres')} {t('perDay')}</strong><p>{t('goalSummaryHint')}</p></div></section>
     <SettingsGroup title={t('personalData')} rows={personal} onClick={setEditingField}/>
-    <section className="settings-section"><h2>{t('goalAndActivity')}</h2><div className="settings-card"><Setting icon={Droplets} label={t('goal')} value={`${goal} ${t('millilitres')}`} onClick={() => setGoalOpen(true)}/><Setting icon={CircleHelp} label={t('activity')} value={activityName} onClick={() => setEditingField('activity')}/></div></section>
     <section className="settings-section"><h2>{t('settings')}</h2><div className="settings-card">{preferences.map((row) => <Setting key={row.id} {...row} toggleValue={row.id === 'reminders' ? profile.reminders.enabled : undefined} onToggle={preferenceAction(row.id)} onClick={preferenceClick(row.id)}/>)}</div></section>
-    <GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><ReminderFrequencySheet open={reminderFrequencyOpen} interval={profile.reminders.intervalMinutes} onClose={() => setReminderFrequencyOpen(false)} onSave={(interval) => updateProfile({ reminders: { ...profile.reminders, intervalMinutes: interval } })}/><EditProfileFieldSheet open={editingField !== null} field={editingField} profile={profile} onClose={() => setEditingField(null)} onSave={updateProfile}/>
+    <ReminderFrequencySheet open={reminderFrequencyOpen} interval={profile.reminders.intervalMinutes} onClose={() => setReminderFrequencyOpen(false)} onSave={(interval) => updateProfile({ reminders: { ...profile.reminders, intervalMinutes: interval } })}/><EditProfileFieldSheet open={editingField !== null} field={editingField} profile={profile} onClose={() => setEditingField(null)} onSave={updateProfile}/>
   </main>
 }
 
