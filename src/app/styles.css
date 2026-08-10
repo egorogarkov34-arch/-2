@@ -139,6 +139,7 @@ body[data-theme="light"] .history-entry strong, body[data-theme="light"] .histor
 .history-confirm button.destructive { color: #fff1f1; background: #b53c43; border-color: #e97076; }
 .single-field-form { display: grid; gap: 14px; }
 .single-field-form .primary-action { margin-top: 3px; }
+.setting-row:disabled { cursor: not-allowed; opacity: .42; }.reminder-frequency-options { display: grid; gap: 9px; }.reminder-frequency-options button { min-height: 58px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border: 1px solid #FFFFFF10; border-radius: 16px; background: #202226; color: #dce3e9; font-size: 15px; text-align: left; transition: border-color .18s, background .18s, color .18s; }.reminder-frequency-options button.is-selected { border-color: #69b9ff; background: #1e5a8e; color: #f0f8ff; box-shadow: inset 0 1px #a4daff29; }.reminder-frequency-options button.is-selected svg { color: #d8f0ff; }
 body[data-theme="light"] .history-confirm { background: #fff2f2; border-color: #f2caca; }
 body[data-theme="light"] .history-confirm button { color: #26313a; background: #eff2f5; border-color: #dce2e8; }
 @media (min-width: 600px) { .amount-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
