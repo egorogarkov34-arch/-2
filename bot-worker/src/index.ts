@@ -64,7 +64,15 @@ interface AdminGrant {
   addedBy: number
 }
 
-interface AdminRequestPayload { initData: string }
+interface AdminSession {
+  userId: number
+  expiresAt: number
+}
+
+interface AdminRequestPayload {
+  initData: string
+  session?: string
+}
 interface AdminRoleRequestPayload extends AdminRequestPayload {
   action: 'grant' | 'revoke'
   userId: number
@@ -114,12 +122,18 @@ const russianReminderCopies = [
 function appUrl(env: Env) { return env.AQUA_APP_URL || DEFAULT_AQUA_APP_URL }
 function userKey(userId: number) { return `user:${userId}` }
 function adminKey(userId: number) { return `admin:${userId}` }
+function adminSessionKey(token: string) { return `admin-session:${token}` }
 function configuredOwnerId(env: Env) {
   const value = Number(env.OWNER_TELEGRAM_ID)
   return Number.isSafeInteger(value) && value > 0 ? value : BUILT_IN_OWNER_TELEGRAM_ID
 }
 function miniAppKeyboard(url: string) { return { inline_keyboard: [[{ text: `${waterEmoji} Open tracker`, web_app: { url } }]] } }
-function adminKeyboard(url: string) { return { inline_keyboard: [[{ text: '\u{1F6E1}\uFE0F \u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0430\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c', web_app: { url: `${url}?admin=1` } }]] } }
+function adminKeyboard(url: string, session: string) {
+  const adminUrl = new URL(url)
+  adminUrl.searchParams.set('admin', '1')
+  adminUrl.searchParams.set('session', session)
+  return { inline_keyboard: [[{ text: '\u{1F6E1}\uFE0F \u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0430\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c', web_app: { url: adminUrl.toString() } }]] }
+}
 function securityHeaders(contentType = 'text/plain; charset=utf-8') { return { 'content-type': contentType, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY', 'content-security-policy': "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'" } }
 function textResponse(text: string, status = 200) { return new Response(text, { status, headers: securityHeaders() }) }
 function jsonResponse(payload: Record<string, unknown>, status = 200, extraHeaders: Record<string, string> = {}) { return new Response(JSON.stringify(payload), { status, headers: { ...securityHeaders('application/json; charset=utf-8'), ...extraHeaders } }) }
@@ -131,13 +145,15 @@ async function telegramRequest(env: Env, method: string, payload: Record<string,
   try { const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) console.error(`Telegram ${method} failed: ${response.status}`); return { ok: response.ok, status: response.status } } catch (error) { console.error(`Telegram ${method} failed`, error); return { ok: false, status: 0 } }
 }
 async function sendMessage(env: Env, chatId: number, text: string) { return telegramRequest(env, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: miniAppKeyboard(appUrl(env)) }) }
-async function sendAdminMessage(env: Env, chatId: number) {
+async function sendAdminMessage(env: Env, chatId: number, userId: number) {
+  const session = await createAdminSession(env, userId)
+  if (!session) return sendMessage(env, chatId, '\u26a0\ufe0f \u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u0449\u0438\u0449\u0451\u043d\u043d\u044b\u0439 \u0432\u0445\u043e\u0434. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 /admin \u0435\u0449\u0451 \u0440\u0430\u0437.')
   return telegramRequest(env, 'sendMessage', {
     chat_id: chatId,
     text: '\u{1F6E1}\uFE0F <b>\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c Aquora</b>\n\n\u0417\u0434\u0435\u0441\u044c \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430 \u0441\u0432\u043e\u0434\u043d\u0430\u044f \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430 \u0438 \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u0434\u043e\u0441\u0442\u0443\u043f\u043e\u043c.\n\n\u0414\u043e\u0441\u0442\u0443\u043f \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442\u0441\u044f \u043d\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435.',
     parse_mode: 'HTML',
     disable_web_page_preview: true,
-    reply_markup: adminKeyboard(appUrl(env)),
+    reply_markup: adminKeyboard(appUrl(env), session),
   })
 }
 async function setOwnerCommandMenu(env: Env) {
@@ -211,6 +227,30 @@ async function adminRole(env: Env, userId: number): Promise<AdminRole | null> {
   return (await readAdminGrant(env, userId))?.role ?? null
 }
 
+async function createAdminSession(env: Env, userId: number) {
+  if (!env.AQUORA_USERS || !await adminRole(env, userId)) return null
+  const token = crypto.randomUUID().replace(/-/g, '')
+  const expiresAt = Date.now() + 15 * 60_000
+  try {
+    await env.AQUORA_USERS.put(adminSessionKey(token), JSON.stringify({ userId, expiresAt } satisfies AdminSession), { expirationTtl: 15 * 60 })
+    return token
+  } catch (error) {
+    console.error('Admin session write failed', error)
+    return null
+  }
+}
+
+async function readAdminSession(env: Env, token: unknown) {
+  if (!env.AQUORA_USERS || typeof token !== 'string' || !/^[a-f0-9]{32}$/i.test(token)) return null
+  try {
+    const value = await env.AQUORA_USERS.get<AdminSession>(adminSessionKey(token), 'json')
+    return value && Number.isSafeInteger(value.userId) && value.expiresAt > Date.now() ? value : null
+  } catch (error) {
+    console.error('Admin session read failed', error)
+    return null
+  }
+}
+
 function isAdminRequest(value: unknown): value is AdminRequestPayload {
   return Boolean(value && typeof value === 'object' && typeof (value as Partial<AdminRequestPayload>).initData === 'string')
 }
@@ -225,11 +265,17 @@ async function authenticatedAdmin(request: Request, env: Env, cors: Record<strin
   let body: unknown
   try { body = await request.json() } catch { return { response: jsonResponse({ ok: false, error: 'invalid_request' }, 400, cors) } }
   if (!isAdminRequest(body)) return { response: jsonResponse({ ok: false, error: 'invalid_request' }, 400, cors) }
-  const user = await validateInitData(body.initData, env)
-  if (!user) return { response: jsonResponse({ ok: false, error: 'unauthorized' }, 401, cors) }
-  const role = await adminRole(env, user.id)
+  const signedUser = await validateInitData(body.initData, env)
+  if (signedUser) {
+    const role = await adminRole(env, signedUser.id)
+    if (role) return { body, user: signedUser, role }
+  }
+
+  const session = await readAdminSession(env, body.session)
+  if (!session) return { response: jsonResponse({ ok: false, error: 'unauthorized' }, 401, cors) }
+  const role = await adminRole(env, session.userId)
   if (!role) return { response: jsonResponse({ ok: false, error: 'forbidden' }, 403, cors) }
-  return { body, user, role }
+  return { body, user: { id: session.userId }, role }
 }
 
 function visibleAmount(record: ReminderRecord) {
@@ -420,7 +466,7 @@ export default {
     else if (command === '/help') await sendMessage(env, message.chat.id, helpText)
     else if (command === '/admin') {
       const role = message.from ? await adminRole(env, message.from.id) : null
-      if (role) await sendAdminMessage(env, message.chat.id)
+      if (role && message.from) await sendAdminMessage(env, message.chat.id, message.from.id)
       else await sendMessage(env, message.chat.id, '\u{1F512} \u0414\u043e\u0441\u0442\u0443\u043f \u043a \u0430\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u0438 \u043e\u0442\u043a\u0440\u044b\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u0434\u043b\u044f \u0432\u043b\u0430\u0434\u0435\u043b\u044c\u0446\u0430 \u0438 \u043d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044b\u0445 \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u043e\u0432.')
     }
     return textResponse('ok')
