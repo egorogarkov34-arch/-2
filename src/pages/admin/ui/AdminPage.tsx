@@ -51,12 +51,13 @@ function workerUrl() {
 async function requestAdmin<T>(path: string, body: Record<string, unknown>) {
   const baseUrl = workerUrl()
   const initData = getTelegramInitData()
+  const session = new URLSearchParams(window.location.search).get('session') ?? ''
   if (!baseUrl) throw new ApiError(503, 'Сервер панели не настроен.')
-  if (!initData) throw new ApiError(401, 'Откройте панель из Telegram.')
+  if (!initData && !session) throw new ApiError(401, 'Откройте панель из Telegram.')
   const response = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ initData, ...body }),
+    body: JSON.stringify({ initData, session, ...body }),
   })
   const payload: unknown = await response.json().catch(() => null)
   if (!response.ok) {
