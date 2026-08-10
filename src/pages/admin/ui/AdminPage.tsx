@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Activity, Ban, BellRing, Crown, ImagePlus, LockKeyhole, Megaphone, Paperclip, RefreshCw, Send, ShieldCheck, Trash2, Unlock, UserPlus, UsersRound, X } from 'lucide-react'
 import { getTelegramInitData, haptic } from '@/shared/lib/telegram'
@@ -94,6 +94,7 @@ export default function AdminPage() {
   const [broadcastMediaKind, setBroadcastMediaKind] = useState<BroadcastMediaKind>('photo')
   const [broadcastMedia, setBroadcastMedia] = useState<BroadcastMedia | null>(null)
   const [premiumEmojiId, setPremiumEmojiId] = useState('')
+  const broadcastFileInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -195,8 +196,10 @@ export default function AdminPage() {
       <form className="admin-broadcast-card" onSubmit={(event) => { event.preventDefault(); void sendBroadcast() }}>
         <textarea value={broadcastText} onChange={(event) => setBroadcastText(event.target.value.slice(0, 1000))} maxLength={1000} placeholder="Текст сообщения для пользователей" aria-label="Текст рассылки" />
         <div className="admin-broadcast-options">
-          <label className="admin-media-picker"><ImagePlus size={15}/><span>Вложение</span><select value={broadcastMediaKind} onChange={(event) => { setBroadcastMediaKind(event.target.value as BroadcastMediaKind); setBroadcastMedia(null) }} aria-label="Тип вложения"><option value="photo">Фото</option><option value="animation">GIF / видео</option><option value="sticker">Стикер</option></select><input key={`${broadcastMediaKind}:${broadcastMedia?.name ?? 'empty'}`} type="file" accept={broadcastMediaKind === 'photo' ? 'image/jpeg,image/png' : broadcastMediaKind === 'animation' ? 'image/gif,video/mp4' : '.webp,.webm,.tgs,image/webp,video/webm,application/x-tgsticker'} onChange={(event) => selectBroadcastMedia(event.currentTarget.files?.[0] ?? null)} aria-label="Файл для рассылки" /></label>
+          <label className="admin-media-picker"><ImagePlus size={15}/><span>Вложение</span><select value={broadcastMediaKind} onChange={(event) => { setBroadcastMediaKind(event.target.value as BroadcastMediaKind); setBroadcastMedia(null) }} aria-label="Тип вложения"><option value="photo">Фото</option><option value="animation">GIF / видео</option><option value="sticker">Стикер</option></select></label>
           <label className="admin-emoji-picker"><span>Premium emoji</span><select value={premiumEmojiId} onChange={(event) => setPremiumEmojiId(event.target.value)} aria-label="Premium emoji"><option value="">Не добавлять</option>{data.premiumEmojis.map((emoji, index) => <option value={emoji.id} key={emoji.id}>Эмодзи {index + 1}</option>)}</select></label>
+          <input ref={broadcastFileInputRef} key={`${broadcastMediaKind}:${broadcastMedia?.name ?? 'empty'}`} className="admin-file-input" type="file" accept={broadcastMediaKind === 'photo' ? 'image/jpeg,image/png' : broadcastMediaKind === 'animation' ? 'image/gif,video/mp4' : '.webp,.webm,.tgs,image/webp,video/webm,application/x-tgsticker'} onChange={(event) => selectBroadcastMedia(event.currentTarget.files?.[0] ?? null)} aria-label="Файл для рассылки" />
+          <button className="admin-file-trigger" type="button" onClick={() => broadcastFileInputRef.current?.click()}><Paperclip size={15}/>{broadcastMediaKind === 'photo' ? 'Выбрать фото' : broadcastMediaKind === 'animation' ? 'Выбрать GIF или видео' : 'Выбрать стикер'}</button>
         </div>
         {broadcastMedia && <div className="admin-media-selected"><Paperclip size={14}/><span>{broadcastMedia.name}</span><button type="button" onClick={() => setBroadcastMedia(null)} aria-label="Убрать вложение"><X size={14}/></button></div>}
         <p className="admin-broadcast-hint">Обычные эмодзи вставляются в текст. Чтобы добавить Premium-эмодзи в список, отправь его этому боту от аккаунта владельца.</p>
