@@ -24,18 +24,25 @@ const initialProfile: Profile = {
   activity: 'moderate' as const,
   units: 'ml' as const,
   language: 'ru' as const,
-  theme: 'dark' as const,
   skin: 'male-classic' as const,
   reminders: { enabled: false, intervalMinutes: 120, timeZone: resolveTimeZone() },
 }
 
 if (!telegramUser?.username && !telegramUser?.first_name) initialProfile.name = '\u0413\u043e\u0441\u0442\u044c'
 
-const mergeProfile = (...profiles: Array<Partial<Profile> | undefined>): Profile => ({
-  ...initialProfile,
-  ...Object.assign({}, ...profiles),
-  reminders: profiles.reduce<ReminderSettings>((settings, profile) => ({ ...settings, ...profile?.reminders }), initialProfile.reminders),
-})
+const mergeProfile = (...profiles: Array<Partial<Profile> | undefined>): Profile => {
+  const sanitizedProfiles = profiles.map((profile) => {
+    if (!profile) return undefined
+    const { theme: _legacyTheme, ...sanitizedProfile } = profile as Partial<Profile> & { theme?: unknown }
+    return sanitizedProfile
+  })
+
+  return {
+    ...initialProfile,
+    ...Object.assign({}, ...sanitizedProfiles),
+    reminders: sanitizedProfiles.reduce<ReminderSettings>((settings, profile) => ({ ...settings, ...profile?.reminders }), initialProfile.reminders),
+  }
+}
 
 const syncUserState = (state: Pick<HydrationState, 'profile' | 'goal' | 'goalMode' | 'dayGoals'>) =>
   syncToCloud(cloudUserStateKey, { profile: state.profile, goal: state.goal, goalMode: state.goalMode, dayGoals: state.dayGoals } satisfies StoredUserState)
