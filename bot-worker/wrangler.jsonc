@@ -7,6 +7,12 @@
   "triggers": {
     "crons": ["*/15 * * * *"]
   },
+  "kv_namespaces": [
+    {
+      "binding": "AQUORA_USERS",
+      "id": "8186cbf87fac41a5bcdf953d249d660d"
+    }
+  ],
   "vars": {
     "AQUA_APP_URL": "https://aquora-water.onrender.com"
   }
