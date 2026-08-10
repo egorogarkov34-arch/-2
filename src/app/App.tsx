@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ErrorBoundary } from '@/shared/ui/ErrorBoundary'
 import { BottomNavigation } from '@/widgets/bottom-navigation/ui/BottomNavigation'
-import { useHydrationStore } from '@/entities/hydration/model/store'
+import { syncCurrentReminderState, useHydrationStore } from '@/entities/hydration/model/store'
 import type { StoredUserState } from '@/entities/hydration/model/types'
 import { initializeTelegram, loadFromCloud, syncToCloud, telegram } from '@/shared/lib/telegram'
 
@@ -28,7 +28,7 @@ export function App() {
       if (stored) { restoreUserState(stored); return }
       const current = useHydrationStore.getState()
       syncToCloud('aquora:user-state', { profile: current.profile, goal: current.goal, goalMode: current.goalMode, dayGoals: current.dayGoals } satisfies StoredUserState)
-    })
+    }).finally(() => { if (active) syncCurrentReminderState() })
     const frame = requestAnimationFrame(() => setReady(true))
     return () => { active = false; cancelAnimationFrame(frame) }
   }, [restoreUserState])
