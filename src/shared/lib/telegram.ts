@@ -20,8 +20,7 @@ export const initializeTelegram = () => {
   app.expand()
   app.requestFullscreen?.()
   app.enableClosingConfirmation?.()
-  const background = app.themeParams.bg_color
-  if (background) document.documentElement.style.setProperty('--telegram-bg', background)
+  document.documentElement.style.setProperty('--telegram-bg', '#090909')
   const topInset = app.contentSafeAreaInset?.top ?? app.safeAreaInset?.top ?? 0
   const bottomInset = app.contentSafeAreaInset?.bottom ?? app.safeAreaInset?.bottom ?? 0
   document.documentElement.style.setProperty('--tg-content-top', `${topInset}px`)
