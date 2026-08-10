@@ -7,7 +7,8 @@ interface Env {
 }
 
 interface TelegramUser { id: number; language_code?: string }
-interface TelegramMessage { chat: { id: number }; from?: TelegramUser; text?: string }
+interface TelegramEntity { type: string; custom_emoji_id?: string }
+interface TelegramMessage { chat: { id: number }; from?: TelegramUser; text?: string; entities?: TelegramEntity[] }
 interface TelegramUpdate { message?: TelegramMessage }
 interface RequestBucket { startedAt: number; count: number }
 
@@ -86,7 +87,16 @@ interface AdminUserAccessRequestPayload extends AdminRequestPayload {
 }
 interface AdminBroadcastRequestPayload extends AdminRequestPayload {
   message: string
+  media?: BroadcastMediaPayload
+  premiumEmojiId?: string
 }
+type BroadcastMediaKind = 'photo' | 'animation' | 'sticker'
+interface BroadcastMediaPayload {
+  kind: BroadcastMediaKind
+  dataUrl: string
+  name: string
+}
+interface PremiumEmojiRecord { id: string; addedAt: number }
 
 const DEFAULT_AQUA_APP_URL = 'https://aquora-water.onrender.com'
 const MAX_WEBHOOK_BODY_BYTES = 64 * 1024
@@ -97,6 +107,8 @@ const INIT_DATA_MAX_AGE_SECONDS = 86_400
 const REMINDER_START_HOUR = 9
 const REMINDER_END_HOUR = 22
 const REMINDER_BATCH_SIZE = 20
+const MAX_BROADCAST_MEDIA_BYTES = 8 * 1024 * 1024
+const MAX_BROADCAST_MEDIA_DATA_URL_LENGTH = 11_200_000
 // Permanent owner allowlist. This is intentionally a numeric Telegram user ID,
 // not a secret: it provides a reliable server-side access check even if a
 // dashboard environment variable is unavailable in a Worker deployment.
@@ -133,6 +145,7 @@ function appUrl(env: Env) { return env.AQUA_APP_URL || DEFAULT_AQUA_APP_URL }
 function userKey(userId: number) { return `user:${userId}` }
 function adminKey(userId: number) { return `admin:${userId}` }
 function adminSessionKey(token: string) { return `admin-session:${token}` }
+function premiumEmojiKey(id: string) { return `premium-emoji:${id}` }
 function configuredOwnerId(env: Env) {
   const value = Number(env.OWNER_TELEGRAM_ID)
   return Number.isSafeInteger(value) && value > 0 ? value : BUILT_IN_OWNER_TELEGRAM_ID
@@ -154,10 +167,49 @@ function tooManyInvalidRequests(request: Request) { const ip = request.headers.g
 async function telegramRequest(env: Env, method: string, payload: Record<string, unknown>) {
   try { const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) console.error(`Telegram ${method} failed: ${response.status}`); return { ok: response.ok, status: response.status } } catch (error) { console.error(`Telegram ${method} failed`, error); return { ok: false, status: 0 } }
 }
+async function telegramFormRequest(env: Env, method: string, payload: FormData) {
+  try { const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', body: payload }); if (!response.ok) console.error(`Telegram ${method} failed: ${response.status}`); return { ok: response.ok, status: response.status } } catch (error) { console.error(`Telegram ${method} failed`, error); return { ok: false, status: 0 } }
+}
 async function sendMessage(env: Env, chatId: number, text: string) { return telegramRequest(env, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: miniAppKeyboard(appUrl(env)) }) }
-function escapeHtml(value: string) { return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character) }
-async function sendBroadcastMessage(env: Env, chatId: number, text: string) {
-  return sendMessage(env, chatId, `📣 <b>Сообщение от Aquora</b>\n\n${escapeHtml(text)}`)
+function isPremiumEmojiId(value: unknown): value is string { return typeof value === 'string' && /^\d{5,30}$/.test(value) }
+function parseMediaDataUrl(value: string) {
+  const match = /^data:([a-zA-Z0-9.+/-]+);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
+  if (!match) return null
+  try {
+    const binary = atob(match[2])
+    if (binary.length > MAX_BROADCAST_MEDIA_BYTES) return null
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    return { mimeType: match[1], bytes }
+  } catch { return null }
+}
+function broadcastText(text: string, premiumEmojiId?: string) {
+  const prefix = '📣 Сообщение от Aquora\n\n'
+  const emoji = premiumEmojiId ? '✨ ' : ''
+  const value = `${prefix}${emoji}${text}`
+  return premiumEmojiId
+    ? { text: value, entities: [{ type: 'custom_emoji', offset: prefix.length, length: 1, custom_emoji_id: premiumEmojiId }] }
+    : { text: value }
+}
+async function sendBroadcastMessage(env: Env, chatId: number, text: string, media?: BroadcastMediaPayload, premiumEmojiId?: string) {
+  const content = broadcastText(text, premiumEmojiId)
+  const keyboard = miniAppKeyboard(appUrl(env))
+  if (!media) return telegramRequest(env, 'sendMessage', { chat_id: chatId, ...content, disable_web_page_preview: true, reply_markup: keyboard })
+  const parsedMedia = parseMediaDataUrl(media.dataUrl)
+  if (!parsedMedia) return { ok: false, status: 400 }
+  const form = new FormData()
+  form.set('chat_id', String(chatId))
+  form.set('reply_markup', JSON.stringify(keyboard))
+  const file = new Blob([parsedMedia.bytes], { type: parsedMedia.mimeType })
+  if (media.kind === 'sticker') {
+    const messageResult = text || premiumEmojiId ? await telegramRequest(env, 'sendMessage', { chat_id: chatId, ...content, disable_web_page_preview: true }) : { ok: true, status: 200 }
+    if (!messageResult.ok) return messageResult
+    form.set('sticker', file, media.name)
+    return telegramFormRequest(env, 'sendSticker', form)
+  }
+  form.set(media.kind, file, media.name)
+  form.set('caption', content.text.slice(0, 1_024))
+  if (content.entities) form.set('caption_entities', JSON.stringify(content.entities))
+  return telegramFormRequest(env, media.kind === 'photo' ? 'sendPhoto' : 'sendAnimation', form)
 }
 async function sendAdminMessage(env: Env, chatId: number, userId: number) {
   const session = await createAdminSession(env, userId)
@@ -284,7 +336,10 @@ function isAdminUserAccessRequest(value: unknown): value is AdminUserAccessReque
 function isAdminBroadcastRequest(value: unknown): value is AdminBroadcastRequestPayload {
   if (!isAdminRequest(value)) return false
   const request = value as Partial<AdminBroadcastRequestPayload>
-  return typeof request.message === 'string' && request.message.trim().length > 0 && request.message.trim().length <= 1_000
+  const media = request.media
+  const validMedia = media === undefined || (Boolean(media) && typeof media === 'object' && ((media as Partial<BroadcastMediaPayload>).kind === 'photo' || (media as Partial<BroadcastMediaPayload>).kind === 'animation' || (media as Partial<BroadcastMediaPayload>).kind === 'sticker') && typeof (media as Partial<BroadcastMediaPayload>).dataUrl === 'string' && (media as Partial<BroadcastMediaPayload>).dataUrl.length <= MAX_BROADCAST_MEDIA_DATA_URL_LENGTH && typeof (media as Partial<BroadcastMediaPayload>).name === 'string' && (media as Partial<BroadcastMediaPayload>).name.length > 0 && (media as Partial<BroadcastMediaPayload>).name.length <= 120)
+  const validEmoji = request.premiumEmojiId === undefined || request.premiumEmojiId === '' || isPremiumEmojiId(request.premiumEmojiId)
+  return typeof request.message === 'string' && request.message.trim().length <= 1_000 && (request.message.trim().length > 0 || media !== undefined) && validMedia && validEmoji
 }
 
 async function authenticatedAdmin(request: Request, env: Env, cors: Record<string, string>) {
@@ -338,6 +393,29 @@ async function readAllUserRecords(env: Env) {
   return records
 }
 
+async function readPremiumEmojis(env: Env) {
+  if (!env.AQUORA_USERS) return [] as PremiumEmojiRecord[]
+  const records: PremiumEmojiRecord[] = []
+  let cursor: string | undefined
+  do {
+    const page = await env.AQUORA_USERS.list({ prefix: 'premium-emoji:', cursor, limit: 100 })
+    const batch = await Promise.all(page.keys.map((key) => env.AQUORA_USERS?.get<PremiumEmojiRecord>(key.name, 'json')))
+    for (const record of batch) if (record && isPremiumEmojiId(record.id)) records.push(record)
+    cursor = page.list_complete ? undefined : page.cursor
+  } while (cursor)
+  return records.sort((left, right) => right.addedAt - left.addedAt).slice(0, 40)
+}
+
+async function savePremiumEmojis(env: Env, message: TelegramMessage) {
+  if (!env.AQUORA_USERS || message.from?.id !== configuredOwnerId(env)) return false
+  const ids = [...new Set((message.entities ?? []).filter((entity) => entity.type === 'custom_emoji' && isPremiumEmojiId(entity.custom_emoji_id)).map((entity) => entity.custom_emoji_id as string))]
+  if (ids.length === 0) return false
+  try {
+    await Promise.all(ids.map((id) => env.AQUORA_USERS?.put(premiumEmojiKey(id), JSON.stringify({ id, addedAt: Date.now() } satisfies PremiumEmojiRecord))))
+    return true
+  } catch (error) { console.error('Premium emoji write failed', error); return false }
+}
+
 async function readAdminGrants(env: Env) {
   if (!env.AQUORA_USERS) return [] as AdminGrant[]
   const grants: AdminGrant[] = []
@@ -352,7 +430,7 @@ async function readAdminGrants(env: Env) {
 }
 
 async function dashboardPayload(env: Env, role: AdminRole) {
-  const [records, grants] = await Promise.all([readAllUserRecords(env), readAdminGrants(env)])
+  const [records, grants, premiumEmojis] = await Promise.all([readAllUserRecords(env), readAdminGrants(env), role === 'owner' ? readPremiumEmojis(env) : Promise.resolve([] as PremiumEmojiRecord[])])
   const users = records.map(userDashboardItem).sort((left, right) => right.updatedAt - left.updatedAt).slice(0, 100)
   const activeToday = records.filter((record) => visibleAmount(record) > 0)
   const totalTodayAmount = activeToday.reduce((sum, record) => sum + visibleAmount(record), 0)
@@ -377,6 +455,7 @@ async function dashboardPayload(env: Env, role: AdminRole) {
     },
     users,
     admins,
+    premiumEmojis,
   }
 }
 
@@ -447,10 +526,11 @@ async function handleAdminBroadcast(request: Request, env: Env) {
   let sent = 0
   let failed = 0
   const message = auth.body.message.trim()
+  const premiumEmojiId = auth.body.premiumEmojiId || undefined
   for (let index = 0; index < recipients.length; index += REMINDER_BATCH_SIZE) {
     const batch = recipients.slice(index, index + REMINDER_BATCH_SIZE)
     const results = await Promise.all(batch.map(async (record) => {
-      const result = await sendBroadcastMessage(env, record.chatId, message)
+      const result = await sendBroadcastMessage(env, record.chatId, message, auth.body.media, premiumEmojiId)
       if (result.ok) return true
       if (result.status === 403) await writeRecord(env, { ...record, deliveryBlocked: true, updatedAt: Date.now() })
       return false
@@ -541,10 +621,14 @@ export default {
     let update: TelegramUpdate
     try { update = await request.json() as TelegramUpdate } catch { return textResponse('Invalid update', 400) }
     const message = update.message
-    if (!message?.text) return textResponse('ok')
+    if (!message?.text && !message?.entities?.length) return textResponse('ok')
     if (message.from && (await readRecord(env, message.from.id))?.blocked) return textResponse('ok')
     await rememberChat(env, message)
     if (message.from?.id === configuredOwnerId(env)) await setOwnerCommandMenu(env)
+    if (await savePremiumEmojis(env, message)) {
+      await sendMessage(env, message.chat.id, '✨ <b>Premium-эмодзи добавлен в библиотеку рассылок.</b>\n\nОткройте /admin и выберите его в блоке «Рассылка».')
+      return textResponse('ok')
+    }
     const command = commandFrom(message)
     if (command === '/start') await sendMessage(env, message.chat.id, welcomeText)
     else if (command === '/open') await sendMessage(env, message.chat.id, openText)
