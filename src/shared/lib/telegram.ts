@@ -81,6 +81,14 @@ export const syncReminderState = ({ profile, goal, intake }: ReminderSyncState) 
       todayAmount,
       language: profile.language,
       reminders: profile.reminders,
+      profile: {
+        name: profile.name,
+        age: profile.age,
+        gender: profile.gender,
+        height: profile.height,
+        weight: profile.weight,
+        activity: profile.activity,
+      },
     }),
   }).catch(() => undefined)
 }
