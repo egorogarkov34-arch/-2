@@ -136,6 +136,19 @@ async function sendAdminMessage(env: Env, chatId: number) {
     reply_markup: adminKeyboard(appUrl(env)),
   })
 }
+async function setOwnerCommandMenu(env: Env) {
+  const ownerId = configuredOwnerId(env)
+  if (!ownerId) return
+  await telegramRequest(env, 'setMyCommands', {
+    scope: { type: 'chat', chat_id: ownerId },
+    commands: [
+      { command: 'start', description: '\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0442\u0440\u0435\u043a\u0435\u0440' },
+      { command: 'open', description: '\u041f\u0435\u0440\u0435\u0439\u0442\u0438 \u0432 Mini App' },
+      { command: 'help', description: '\u041f\u043e\u043c\u043e\u0449\u044c' },
+      { command: 'admin', description: '\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c' },
+    ],
+  })
+}
 function commandFrom(message: TelegramMessage) { return (message.text?.trim().split(/\s+/)[0] ?? '').split('@')[0].toLowerCase() }
 function isLanguage(value: unknown): value is Language { return value === 'ru' || value === 'en' }
 function isReminderInterval(value: unknown): value is ReminderInterval { return value === 30 || value === 60 || value === 120 || value === 180 }
@@ -396,6 +409,7 @@ export default {
     const message = update.message
     if (!message?.text) return textResponse('ok')
     await rememberChat(env, message)
+    if (message.from?.id === configuredOwnerId(env)) await setOwnerCommandMenu(env)
     const command = commandFrom(message)
     if (command === '/start') await sendMessage(env, message.chat.id, welcomeText)
     else if (command === '/open') await sendMessage(env, message.chat.id, openText)
