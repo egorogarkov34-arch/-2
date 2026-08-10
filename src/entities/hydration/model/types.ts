@@ -31,7 +31,6 @@ export interface Profile {
   activity: ActivityLevel
   units: 'ml' | 'oz'
   language: 'ru' | 'en'
-  theme?: 'dark'
   skin: BodySkin
   reminders: ReminderSettings
 }
