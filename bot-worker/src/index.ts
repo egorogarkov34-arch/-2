@@ -458,7 +458,7 @@ export default {
     try { update = await request.json() as TelegramUpdate } catch { return textResponse('Invalid update', 400) }
     const message = update.message
     if (!message?.text) return textResponse('ok')
-    await rememberChat(env, message)
+    await rememberChat(env, message) 
     if (message.from?.id === configuredOwnerId(env)) await setOwnerCommandMenu(env)
     const command = commandFrom(message)
     if (command === '/start') await sendMessage(env, message.chat.id, welcomeText)
