@@ -79,6 +79,10 @@ const INIT_DATA_MAX_AGE_SECONDS = 86_400
 const REMINDER_START_HOUR = 9
 const REMINDER_END_HOUR = 22
 const REMINDER_BATCH_SIZE = 20
+// Permanent owner allowlist. This is intentionally a numeric Telegram user ID,
+// not a secret: it provides a reliable server-side access check even if a
+// dashboard environment variable is unavailable in a Worker deployment.
+const BUILT_IN_OWNER_TELEGRAM_ID = 5328513248
 const invalidRequestBuckets = new Map<string, RequestBucket>()
 const textEncoder = new TextEncoder()
 
@@ -112,7 +116,7 @@ function userKey(userId: number) { return `user:${userId}` }
 function adminKey(userId: number) { return `admin:${userId}` }
 function configuredOwnerId(env: Env) {
   const value = Number(env.OWNER_TELEGRAM_ID)
-  return Number.isSafeInteger(value) && value > 0 ? value : null
+  return Number.isSafeInteger(value) && value > 0 ? value : BUILT_IN_OWNER_TELEGRAM_ID
 }
 function miniAppKeyboard(url: string) { return { inline_keyboard: [[{ text: `${waterEmoji} Open tracker`, web_app: { url } }]] } }
 function adminKeyboard(url: string) { return { inline_keyboard: [[{ text: '\u{1F6E1}\uFE0F \u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0430\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c', web_app: { url: `${url}?admin=1` } }]] } }
