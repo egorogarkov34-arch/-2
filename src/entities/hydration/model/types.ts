@@ -1,6 +1,13 @@
 export type ActivityLevel = 'low' | 'moderate' | 'high'
 export type Gender = 'male' | 'female' | 'other'
 export type BodySkin = 'male-classic' | 'female-classic' | 'male-athlete'
+export type ReminderInterval = 30 | 60 | 120 | 180
+
+export interface ReminderSettings {
+  enabled: boolean
+  intervalMinutes: ReminderInterval
+  timeZone: string
+}
 
 export interface IntakeEntry {
   id: string
@@ -26,6 +33,7 @@ export interface Profile {
   language: 'ru' | 'en'
   theme: 'dark' | 'light'
   skin: BodySkin
+  reminders: ReminderSettings
 }
 
 export interface HydrationState {
