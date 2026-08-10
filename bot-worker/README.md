@@ -1,30 +1,45 @@
 # Aquora Telegram bot on Cloudflare Workers
 
-This Worker runs the bot without a permanent Render server. It receives Telegram updates through a webhook.
+This Worker receives Telegram webhooks and sends optional hydration reminders. The Mini App remains hosted on Render.
 
-## Required Cloudflare secrets
+## What the reminder system does
 
-Add these variables in the Worker settings. Do not put their values in GitHub.
+- The user enables reminders and chooses an interval in the Mini App.
+- The Mini App synchronizes only the current goal, today’s amount, language, and reminder settings.
+- The Worker validates Telegram `initData` before accepting a change.
+- A Cloudflare cron runs every 15 minutes and sends a reminder only during 09:00–22:00 in the user’s selected time zone.
+- Reminders stop after the daily goal is reached and start fresh on the next local day.
+- When a user blocks the bot, delivery is automatically paused until they send `/start`, `/open`, or `/help` again.
 
-- `TELEGRAM_BOT_TOKEN` вЂ” token from BotFather.
-- `AQUA_APP_URL` вЂ” public HTTPS URL of the Aquora Mini App on Render.
-- `TELEGRAM_WEBHOOK_SECRET` вЂ” a new random value made from letters, numbers, `_`, or `-`.
+## Required Cloudflare configuration
 
-## Commands
+Keep these values in Worker **Settings → Variables and Secrets**. Never commit a token or secret to GitHub.
 
-- `/start` вЂ” bilingual welcome text and Mini App button.
-- `/open` вЂ” Mini App button.
-- `/help` вЂ” command list.
+- `TELEGRAM_BOT_TOKEN` — token from BotFather, stored as a secret.
+- `TELEGRAM_WEBHOOK_SECRET` — a random secret used to verify Telegram webhook requests, stored as a secret.
+- `AQUA_APP_URL` — the public HTTPS URL of the Render Mini App, for example `https://aquora-water.onrender.com`.
+- `AQUORA_USERS` — KV namespace binding. Create a KV namespace, then bind it to the Worker with this exact variable name.
 
-The bot does not store user profiles and does not send reminder notifications.
+The cron `*/15 * * * *` is declared in `wrangler.jsonc` and is deployed with the Worker.
 
-The Worker is deployed automatically from the `main` branch.
+## Required Render configuration
 
-## Register the webhook
+Add this build-time environment variable to the Mini App service on Render, then redeploy it:
 
-The Worker intentionally has no public `/setup` route. This prevents third parties from changing bot settings by opening a URL.
+```text
+VITE_AQUORA_BOT_URL=https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev
+```
 
-Register or rotate the webhook only from a trusted terminal with the token stored locally as an environment variable. Pass the same `TELEGRAM_WEBHOOK_SECRET` as Telegram's `secret_token`.
+Use the Worker’s public `workers.dev` URL without a trailing slash. The Mini App can then securely synchronize reminder settings.
 
-Never place either secret in GitHub, Render variables beginning with `VITE_`, screenshots, or chat messages.
+## Bot commands
 
+- `/start` — bilingual welcome message and Mini App button.
+- `/open` — opens the tracker.
+- `/help` — command list.
+
+## Webhook registration
+
+The Worker intentionally has no public setup endpoint. Register or rotate the Telegram webhook only from a trusted terminal, using the same `TELEGRAM_WEBHOOK_SECRET` as Telegram’s `secret_token`.
+
+Never put the bot token, webhook secret, or KV credentials in GitHub, `VITE_` variables, screenshots, or chat messages.
