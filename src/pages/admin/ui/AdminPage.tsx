@@ -45,7 +45,7 @@ const activityLabel: Record<DashboardUser['activity'], string> = { low: 'Низ�
 const number = new Intl.NumberFormat('ru-RU')
 
 function workerUrl() {
-  return (import.meta.env.VITE_AQUORA_BOT_URL as string | undefined)?.replace(/\/+$/, '')
+  return 'https://aquora-water-bot.egorogarkov34.workers.dev'
 }
 
 async function requestAdmin<T>(path: string, body: Record<string, unknown>) {
