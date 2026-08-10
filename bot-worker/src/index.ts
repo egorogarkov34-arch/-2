@@ -43,6 +43,9 @@ interface ReminderRecord {
   lastReminderDateKey?: string
   completedDateKey?: string
   deliveryBlocked?: boolean
+  blocked?: boolean
+  blockedAt?: number
+  blockedBy?: number
   profile?: ProfileSnapshot
   updatedAt: number
 }
@@ -76,6 +79,13 @@ interface AdminRequestPayload {
 interface AdminRoleRequestPayload extends AdminRequestPayload {
   action: 'grant' | 'revoke'
   userId: number
+}
+interface AdminUserAccessRequestPayload extends AdminRequestPayload {
+  action: 'block' | 'unblock'
+  userId: number
+}
+interface AdminBroadcastRequestPayload extends AdminRequestPayload {
+  message: string
 }
 
 const DEFAULT_AQUA_APP_URL = 'https://aquora-water.onrender.com'
@@ -145,6 +155,10 @@ async function telegramRequest(env: Env, method: string, payload: Record<string,
   try { const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) console.error(`Telegram ${method} failed: ${response.status}`); return { ok: response.ok, status: response.status } } catch (error) { console.error(`Telegram ${method} failed`, error); return { ok: false, status: 0 } }
 }
 async function sendMessage(env: Env, chatId: number, text: string) { return telegramRequest(env, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: miniAppKeyboard(appUrl(env)) }) }
+function escapeHtml(value: string) { return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character) }
+async function sendBroadcastMessage(env: Env, chatId: number, text: string) {
+  return sendMessage(env, chatId, `📣 <b>Сообщение от Aquora</b>\n\n${escapeHtml(text)}`)
+}
 async function sendAdminMessage(env: Env, chatId: number, userId: number) {
   const session = await createAdminSession(env, userId)
   if (!session) return sendMessage(env, chatId, '\u26a0\ufe0f \u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u0449\u0438\u0449\u0451\u043d\u043d\u044b\u0439 \u0432\u0445\u043e\u0434. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 /admin \u0435\u0449\u0451 \u0440\u0430\u0437.')
@@ -261,6 +275,18 @@ function isAdminRoleRequest(value: unknown): value is AdminRoleRequestPayload {
   return (request.action === 'grant' || request.action === 'revoke') && Number.isSafeInteger(request.userId) && Number(request.userId) > 0
 }
 
+function isAdminUserAccessRequest(value: unknown): value is AdminUserAccessRequestPayload {
+  if (!isAdminRequest(value)) return false
+  const request = value as Partial<AdminUserAccessRequestPayload>
+  return (request.action === 'block' || request.action === 'unblock') && Number.isSafeInteger(request.userId) && Number(request.userId) > 0
+}
+
+function isAdminBroadcastRequest(value: unknown): value is AdminBroadcastRequestPayload {
+  if (!isAdminRequest(value)) return false
+  const request = value as Partial<AdminBroadcastRequestPayload>
+  return typeof request.message === 'string' && request.message.trim().length > 0 && request.message.trim().length <= 1_000
+}
+
 async function authenticatedAdmin(request: Request, env: Env, cors: Record<string, string>) {
   let body: unknown
   try { body = await request.json() } catch { return { response: jsonResponse({ ok: false, error: 'invalid_request' }, 400, cors) } }
@@ -293,6 +319,7 @@ function userDashboardItem(record: ReminderRecord) {
     todayAmount: amount,
     progress: record.goal > 0 ? Math.round((amount / record.goal) * 100) : 0,
     remindersEnabled: Boolean(record.reminders?.enabled && !record.deliveryBlocked),
+    blocked: Boolean(record.blocked),
     updatedAt: record.updatedAt,
     lastReminderAt: record.lastReminderAt ?? null,
   }
@@ -381,10 +408,64 @@ async function handleAdminRoles(request: Request, env: Env) {
   return jsonResponse(await dashboardPayload(env, auth.role), 200, cors)
 }
 
+async function handleAdminUserAccess(request: Request, env: Env) {
+  const cors = corsHeaders(request, env)
+  if (request.method === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : textResponse('Forbidden', 403)
+  if (!cors || request.method !== 'POST') return textResponse('Forbidden', 403)
+  const auth = await authenticatedAdmin(request, env, cors)
+  if ('response' in auth) return auth.response
+  if (auth.role !== 'owner') return jsonResponse({ ok: false, error: 'owner_required' }, 403, cors)
+  if (!isAdminUserAccessRequest(auth.body)) return jsonResponse({ ok: false, error: 'invalid_request' }, 400, cors)
+  const ownerId = configuredOwnerId(env)
+  if (!env.AQUORA_USERS) return jsonResponse({ ok: false, error: 'storage_not_configured' }, 503, cors)
+  if (auth.body.userId === ownerId) return jsonResponse({ ok: false, error: 'owner_cannot_be_blocked' }, 400, cors)
+  const record = await readRecord(env, auth.body.userId)
+  if (!record) return jsonResponse({ ok: false, error: 'user_not_found' }, 404, cors)
+  const blocked = auth.body.action === 'block'
+  const next: ReminderRecord = {
+    ...record,
+    blocked,
+    blockedAt: blocked ? Date.now() : undefined,
+    blockedBy: blocked ? auth.user.id : undefined,
+    updatedAt: Date.now(),
+  }
+  if (!await writeRecord(env, next)) return jsonResponse({ ok: false, error: 'storage_unavailable' }, 503, cors)
+  return jsonResponse(await dashboardPayload(env, auth.role), 200, cors)
+}
+
+async function handleAdminBroadcast(request: Request, env: Env) {
+  const cors = corsHeaders(request, env)
+  if (request.method === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : textResponse('Forbidden', 403)
+  if (!cors || request.method !== 'POST') return textResponse('Forbidden', 403)
+  const auth = await authenticatedAdmin(request, env, cors)
+  if ('response' in auth) return auth.response
+  if (auth.role !== 'owner') return jsonResponse({ ok: false, error: 'owner_required' }, 403, cors)
+  if (!isAdminBroadcastRequest(auth.body)) return jsonResponse({ ok: false, error: 'invalid_request' }, 400, cors)
+  if (!env.AQUORA_USERS || !env.TELEGRAM_BOT_TOKEN) return jsonResponse({ ok: false, error: 'storage_not_configured' }, 503, cors)
+
+  const recipients = (await readAllUserRecords(env)).filter((record) => !record.blocked && !record.deliveryBlocked && record.chatId > 0)
+  let sent = 0
+  let failed = 0
+  const message = auth.body.message.trim()
+  for (let index = 0; index < recipients.length; index += REMINDER_BATCH_SIZE) {
+    const batch = recipients.slice(index, index + REMINDER_BATCH_SIZE)
+    const results = await Promise.all(batch.map(async (record) => {
+      const result = await sendBroadcastMessage(env, record.chatId, message)
+      if (result.ok) return true
+      if (result.status === 403) await writeRecord(env, { ...record, deliveryBlocked: true, updatedAt: Date.now() })
+      return false
+    }))
+    sent += results.filter(Boolean).length
+    failed += results.filter((result) => !result).length
+  }
+  return jsonResponse({ ok: true, sent, failed, recipients: recipients.length }, 200, cors)
+}
+
 async function rememberChat(env: Env, message: TelegramMessage) {
   const userId = message.from?.id
   if (!userId || message.chat.id !== userId || !env.AQUORA_USERS) return
   const existing = await readRecord(env, userId)
+  if (existing?.blocked) return
   const record: ReminderRecord = existing ?? { userId, chatId: message.chat.id, goal: 2000, todayAmount: 0, dateKey: localDate('Europe/Moscow').dateKey, language: message.from?.language_code === 'ru' ? 'ru' : 'en', reminders: { enabled: false, intervalMinutes: 120, timeZone: 'Europe/Moscow' }, reminderIndex: 0, updatedAt: Date.now() }
   await writeRecord(env, { ...record, chatId: message.chat.id, deliveryBlocked: false, updatedAt: Date.now() })
 }
@@ -401,7 +482,8 @@ async function handleReminderState(request: Request, env: Env) {
   if (!payload || !user) return tooManyInvalidRequests(request) ? jsonResponse({ ok: false }, 429, cors) : jsonResponse({ ok: false }, 401, cors)
   if (!env.AQUORA_USERS) return jsonResponse({ ok: false, error: 'storage_not_configured' }, 503, cors)
   const existing = await readRecord(env, user.id)
-  const record: ReminderRecord = { userId: user.id, chatId: existing?.chatId ?? user.id, goal: payload.goal, todayAmount: payload.todayAmount, dateKey: payload.dateKey, language: payload.language, reminders: payload.reminders, profile: payload.profile ?? existing?.profile, reminderIndex: existing?.reminderIndex ?? 0, lastReminderAt: existing?.lastReminderAt, lastReminderDateKey: existing?.lastReminderDateKey, completedDateKey: existing?.completedDateKey, deliveryBlocked: false, updatedAt: Date.now() }
+  if (existing?.blocked) return jsonResponse({ ok: false, error: 'user_blocked' }, 403, cors)
+  const record: ReminderRecord = { userId: user.id, chatId: existing?.chatId ?? user.id, goal: payload.goal, todayAmount: payload.todayAmount, dateKey: payload.dateKey, language: payload.language, reminders: payload.reminders, profile: payload.profile ?? existing?.profile, reminderIndex: existing?.reminderIndex ?? 0, lastReminderAt: existing?.lastReminderAt, lastReminderDateKey: existing?.lastReminderDateKey, completedDateKey: existing?.completedDateKey, deliveryBlocked: false, blocked: false, updatedAt: Date.now() }
   if (!await writeRecord(env, record)) return jsonResponse({ ok: false, error: 'storage_unavailable' }, 503, cors)
   return jsonResponse({ ok: true }, 200, cors)
 }
@@ -425,7 +507,7 @@ function reminderText(record: ReminderRecord, amount: number) {
 async function processReminder(env: Env, key: string) {
   if (!env.AQUORA_USERS) return
   const value = await env.AQUORA_USERS.get<ReminderRecord>(key, 'json')
-  if (!value?.reminders?.enabled || value.deliveryBlocked || !isReminderInterval(value.reminders.intervalMinutes) || !isFiniteNumber(value.goal, 500, 10_000)) return
+  if (!value?.reminders?.enabled || value.deliveryBlocked || value.blocked || !isReminderInterval(value.reminders.intervalMinutes) || !isFiniteNumber(value.goal, 500, 10_000)) return
   const local = localDate(value.reminders.timeZone)
   if (local.hour < REMINDER_START_HOUR || local.hour >= REMINDER_END_HOUR) return
   const isNewDay = value.dateKey !== local.dateKey
@@ -448,6 +530,8 @@ export default {
     if (url.pathname === '/api/reminder-state') return handleReminderState(request, env)
     if (url.pathname === '/api/admin/dashboard') return handleAdminDashboard(request, env)
     if (url.pathname === '/api/admin/roles') return handleAdminRoles(request, env)
+    if (url.pathname === '/api/admin/users/access') return handleAdminUserAccess(request, env)
+    if (url.pathname === '/api/admin/broadcast') return handleAdminBroadcast(request, env)
     if (request.method === 'GET' && url.pathname === '/') return textResponse('Aquora Telegram bot is online.')
     if (request.method !== 'POST') return textResponse('Not found', 404)
     const contentLength = Number(request.headers.get('content-length') ?? '0')
@@ -458,7 +542,8 @@ export default {
     try { update = await request.json() as TelegramUpdate } catch { return textResponse('Invalid update', 400) }
     const message = update.message
     if (!message?.text) return textResponse('ok')
-    await rememberChat(env, message) 
+    if (message.from && (await readRecord(env, message.from.id))?.blocked) return textResponse('ok')
+    await rememberChat(env, message)
     if (message.from?.id === configuredOwnerId(env)) await setOwnerCommandMenu(env)
     const command = commandFrom(message)
     if (command === '/start') await sendMessage(env, message.chat.id, welcomeText)
