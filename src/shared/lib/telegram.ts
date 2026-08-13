@@ -18,7 +18,7 @@ export const initializeTelegram = () => {
 
   app.ready()
   app.expand()
-  app.requestFullscreen?.()
+  try { app.requestFullscreen?.() } catch { /* Older Telegram clients do not support fullscreen. */ }
   app.enableClosingConfirmation?.()
   document.documentElement.style.setProperty('--telegram-bg', '#090909')
   const topInset = app.contentSafeAreaInset?.top ?? app.safeAreaInset?.top ?? 0
