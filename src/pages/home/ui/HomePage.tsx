@@ -158,10 +158,6 @@ export default function HomePage() {
         <h1>{t('greeting')}, {profile.name}</h1>
         <p>{labels.subtitle} <span aria-hidden="true">💧</span></p>
       </div>
-      <div className="home-v3-header-actions">
-        <button type="button" className="home-v3-header-action" onClick={() => { haptic.tap(); setHistoryOpen(true) }} aria-label={labels.history}><History size={20}/></button>
-        <button type="button" className="home-v3-header-action" onClick={() => { haptic.tap(); setWardrobeOpen(true) }} aria-label={labels.skins}><HangerIcon/></button>
-      </div>
     </motion.header>
 
     <motion.section className="home-v3-balance-card" variants={item} aria-label={t('progress')}>
