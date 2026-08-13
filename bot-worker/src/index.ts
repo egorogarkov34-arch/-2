@@ -183,22 +183,19 @@ function parseMediaDataUrl(value: string) {
   } catch { return null }
 }
 function broadcastText(text: string, premiumEmojiId?: string) {
-  const prefix = '📣 Сообщение от Aquora\n\n'
   const emoji = premiumEmojiId ? '✨ ' : ''
-  const value = `${prefix}${emoji}${text}`
+  const value = `${emoji}${text}`
   return premiumEmojiId
-    ? { text: value, entities: [{ type: 'custom_emoji', offset: prefix.length, length: 1, custom_emoji_id: premiumEmojiId }] }
+    ? { text: value, entities: [{ type: 'custom_emoji', offset: 0, length: 1, custom_emoji_id: premiumEmojiId }] }
     : { text: value }
 }
 async function sendBroadcastMessage(env: Env, chatId: number, text: string, media?: BroadcastMediaPayload, premiumEmojiId?: string) {
   const content = broadcastText(text, premiumEmojiId)
-  const keyboard = miniAppKeyboard(appUrl(env))
-  if (!media) return telegramRequest(env, 'sendMessage', { chat_id: chatId, ...content, disable_web_page_preview: true, reply_markup: keyboard })
+  if (!media) return telegramRequest(env, 'sendMessage', { chat_id: chatId, ...content, disable_web_page_preview: true })
   const parsedMedia = parseMediaDataUrl(media.dataUrl)
   if (!parsedMedia) return { ok: false, status: 400 }
   const form = new FormData()
   form.set('chat_id', String(chatId))
-  form.set('reply_markup', JSON.stringify(keyboard))
   const file = new Blob([parsedMedia.bytes], { type: parsedMedia.mimeType })
   if (media.kind === 'sticker') {
     const messageResult = text || premiumEmojiId ? await telegramRequest(env, 'sendMessage', { chat_id: chatId, ...content, disable_web_page_preview: true }) : { ok: true, status: 200 }
