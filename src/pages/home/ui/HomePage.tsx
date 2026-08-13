@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
-import { ChevronRight, Droplets, History, Minus, PencilLine, Plus, Trash2 } from 'lucide-react'
+import { BellRing, Droplets, Flame, History, Minus, PencilLine, Plus, Trophy } from 'lucide-react'
 import { useHydrationStore, selectTodayAmount } from '@/entities/hydration/model/store'
-import { BodyWater, getHydrationMood } from '@/entities/hydration/ui/BodyWater'
+import { BodyWater } from '@/entities/hydration/ui/BodyWater'
 import { ProgressRing } from '@/entities/hydration/ui/ProgressRing'
 import { AddWaterSheet } from '@/features/log-water/ui/AddWaterSheet'
 import { GoalSheet } from '@/features/goal/ui/GoalSheet'
@@ -13,10 +13,36 @@ import { haptic } from '@/shared/lib/telegram'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { useTranslation } from '@/shared/lib/i18n'
 
-const container: Variants = { hidden: {}, show: { transition: { staggerChildren: .07 } } }
-const item: Variants = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 180, damping: 20 } } }
+const container: Variants = { hidden: {}, show: { transition: { staggerChildren: .06 } } }
+const item: Variants = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 180, damping: 20 } },
+}
 const percentageMarks = [100, 75, 50, 25] as const
-const moodKeyByState = { sad: 'moodSad', calm: 'moodCalm', happy: 'moodHappy', joy: 'moodJoy' } as const
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function addDays(date: Date, days: number) {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+function calculateStreak(dailyTotals: Record<string, number>, dayGoals: Record<string, number>, goal: number) {
+  let cursor = startOfDay(new Date())
+  const reachedGoal = (date: Date) => (dailyTotals[todayKey(date)] ?? 0) >= (dayGoals[todayKey(date)] ?? goal)
+
+  if (!reachedGoal(cursor)) cursor = addDays(cursor, -1)
+
+  let days = 0
+  while (reachedGoal(cursor)) {
+    days += 1
+    cursor = addDays(cursor, -1)
+  }
+  return days
+}
 
 export default function HomePage() {
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -26,52 +52,182 @@ export default function HomePage() {
   const [toast, setToast] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('250')
   const [isEditingCustomAmount, setIsEditingCustomAmount] = useState(false)
-  const [refreshVersion, setRefreshVersion] = useState(0)
-  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake, updateProfile } = useHydrationStore()
+  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake, dayGoals, setActiveTab, updateProfile } = useHydrationStore()
   const { language, t } = useTranslation()
   const millilitres = t('millilitres')
   const today = useHydrationStore(selectTodayAmount)
   const completion = goal > 0 ? Math.round((today / goal) * 100) : 0
   const fillPercentage = clamp(completion, 0, 100)
-  const hydrationMood = getHydrationMood(fillPercentage)
   const remaining = Math.max(goal - today, 0)
   const locale = language === 'en' ? 'en-US' : 'ru-RU'
-  const todayDate = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(new Date())
-  const recent = useMemo(() => intake.filter((entry) => todayKey(new Date(entry.createdAt)) === todayKey()).slice(-3).reverse(), [intake])
-  const add = (amount: number) => { addWater(amount); setToast(amount); window.setTimeout(() => setToast(null), 2500) }
+
+  const dailyTotals = useMemo(() => intake.reduce<Record<string, number>>((totals, entry) => {
+    const key = todayKey(new Date(entry.createdAt))
+    totals[key] = (totals[key] ?? 0) + entry.amount
+    return totals
+  }, {}), [intake])
+
+  const weekAverage = useMemo(() => {
+    const todayStart = startOfDay(new Date())
+    const total = Array.from({ length: 7 }, (_, index) => dailyTotals[todayKey(addDays(todayStart, -index))] ?? 0)
+      .reduce((sum, value) => sum + value, 0)
+    return Math.round(total / 7)
+  }, [dailyTotals])
+
+  const bestDay = useMemo(() => Object.entries(dailyTotals).reduce(
+    (best, [date, amount]) => amount > best.amount ? { date, amount } : best,
+    { date: todayKey(), amount: 0 },
+  ), [dailyTotals])
+
+  const streak = useMemo(() => calculateStreak(dailyTotals, dayGoals, goal), [dailyTotals, dayGoals, goal])
+  const bestDate = useMemo(() => {
+    if (bestDay.amount === 0) return language === 'en' ? 'No entries yet' : 'Пока нет записей'
+    return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(new Date(`${bestDay.date}T12:00:00`))
+  }, [bestDay, language, locale])
+
+  const add = (amount: number) => {
+    addWater(amount)
+    setToast(amount)
+    window.setTimeout(() => setToast(null), 2500)
+  }
+
   const submitCustomAmount = () => {
     const amount = Number(customAmount)
-    if (!Number.isFinite(amount) || amount < 1 || amount > 5000) { haptic.error(); return }
+    if (!Number.isFinite(amount) || amount < 1 || amount > 5000) {
+      haptic.error()
+      return
+    }
     haptic.success()
     add(amount)
   }
+
   const adjustCustomAmount = (delta: number) => {
     const nextAmount = Math.max(0, Math.min(5000, (Number(customAmount) || 0) + delta))
     haptic.tap()
     setCustomAmount(String(nextAmount))
   }
-  const remove = (id: string) => { haptic.success(); removeWater(id) }
-  const refresh = useCallback(() => { haptic.success(); setRefreshVersion((version) => version + 1) }, [])
-  const { ref, pullDistance, isRefreshing } = usePullToRefresh(refresh)
 
-  return <motion.main ref={ref} className={`page home-page${isEditingCustomAmount ? ' is-editing-amount' : ''}`} variants={container} initial="hidden" animate="show">
-    <motion.div className="refresh-indicator" animate={{ y: Math.max(-46, pullDistance - 46), opacity: pullDistance ? 1 : 0 }}><Droplets size={16} className={isRefreshing ? 'is-refreshing' : ''}/><span>{isRefreshing ? t('refresh') : t('pullToRefresh')}</span></motion.div>
-    <motion.header className="home-header" variants={item}><div><p className="eyebrow">{t('today')}, {todayDate}</p><h1>{t('greeting')}, {profile.name} <span>✦</span></h1></div></motion.header>
-    <motion.section className="goal-overview" variants={item} aria-label={t('progress')}><div className="goal-copy"><p>{t('todayBalance')}</p><strong>{formatMl(today, language)} <small>{millilitres}</small></strong><span>{t('of')} {formatMl(goal, language)} {millilitres}</span></div><ProgressRing value={fillPercentage} label={`${completion}%`} size={96} stroke={8}/></motion.section>
-    <motion.section className="body-section" variants={item}><div className="body-metrics"><span>{t('remaining')}</span><strong>{remaining ? `${formatMl(remaining, language)} ${millilitres}` : t('goalReached')}</strong></div><div className="body-scale" aria-hidden="true">{percentageMarks.map((mark) => <span key={mark}><b>{mark}%</b><i/></span>)}</div><motion.p className={`body-message is-${hydrationMood}`} key={hydrationMood} initial={{ opacity: 0, y: 6, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', stiffness: 240, damping: 22 }}>{t(moodKeyByState[hydrationMood])}</motion.p><BodyWater percentage={fillPercentage} skin={profile.skin}/><button className="wardrobe-button" onClick={() => { haptic.tap(); setWardrobeOpen(true) }} aria-label={t('wardrobe')}><HangerIcon/></button><button className="edit-goal" onClick={() => { haptic.tap(); setGoalOpen(true) }}><PencilLine size={14}/> {t('goal')} {formatMl(goal, language)} {millilitres}</button></motion.section>
-    <motion.section className="quick-actions" variants={item}><motion.button className="add-water-button" onClick={() => { haptic.tap(); setSheetOpen(true) }} whileTap={{ scale: .98 }}><span className="add-icon"><Plus size={24}/></span><span><b>{t('addWater')}</b><small>{t('createEntry')}</small></span><Droplets size={21}/></motion.button><button className="history-button" onClick={() => setHistoryOpen(true)} aria-label={t('history')}><History size={20}/></button></motion.section>
-    <motion.form className="home-custom-entry" variants={item} onSubmit={(event) => { event.preventDefault(); submitCustomAmount() }}>
-      <label htmlFor="home-custom-amount">{t('customAmount')}</label>
-      <div className="home-custom-controls">
-        <button type="button" className="amount-step" onClick={() => adjustCustomAmount(-50)} aria-label={`-50 ${millilitres}`}><Minus size={17}/></button>
-        <div className="home-amount-input"><input id="home-custom-amount" value={customAmount} onChange={(event) => setCustomAmount(event.target.value.replace(/\D/g, '').slice(0, 4))} onFocus={() => setIsEditingCustomAmount(true)} onBlur={() => setIsEditingCustomAmount(false)} inputMode="numeric" aria-label={t('customAmount')} /><span>{millilitres}</span></div>
-        <button type="button" className="amount-step" onClick={() => adjustCustomAmount(50)} aria-label={`+50 ${millilitres}`}><Plus size={17}/></button>
-        <motion.button type="submit" className="home-add-custom" whileTap={{ scale: .96 }} disabled={!customAmount || Number(customAmount) > 5000}>{t('addWater')}</motion.button>
+  const remove = (id: string) => {
+    haptic.success()
+    removeWater(id)
+  }
+
+  const refresh = useCallback(() => haptic.success(), [])
+  const { ref, pullDistance, isRefreshing } = usePullToRefresh(refresh)
+  const labels = language === 'en'
+    ? {
+        subtitle: 'Let’s drink some water',
+        remaining: 'Remaining',
+        untilGoal: 'to your goal',
+        goal: 'Daily goal',
+        progress: 'Your progress',
+        best: 'Best result',
+        streak: 'Streak',
+        inRow: 'in a row',
+        average: 'Weekly average',
+        perDay: 'per day',
+        fast: 'Quick add',
+        history: 'Water history',
+        skins: 'Skins',
+        reminders: 'Reminders',
+      }
+    : {
+        subtitle: 'Давайте выпьем немного воды',
+        remaining: 'Осталось',
+        untilGoal: 'до цели',
+        goal: 'Цель в день',
+        progress: 'Ваш прогресс',
+        best: 'Лучший результат',
+        streak: 'Серия',
+        inRow: 'подряд',
+        average: 'Среднее за неделю',
+        perDay: 'в день',
+        fast: 'Быстрое добавление',
+        history: 'История воды',
+        skins: 'Скины',
+        reminders: 'Напоминания',
+      }
+
+  return <motion.main ref={ref} className={`page home-v3-page${isEditingCustomAmount ? ' is-editing-amount' : ''}`} variants={container} initial="hidden" animate="show">
+    <motion.div className="refresh-indicator" animate={{ y: Math.max(-46, pullDistance - 46), opacity: pullDistance ? 1 : 0 }}>
+      <Droplets size={16} className={isRefreshing ? 'is-refreshing' : ''}/><span>{isRefreshing ? t('refresh') : t('pullToRefresh')}</span>
+    </motion.div>
+
+    <motion.header className="home-v3-header" variants={item}>
+      <div>
+        <h1>{t('greeting')}, {profile.name}</h1>
+        <p>{labels.subtitle} <span aria-hidden="true">💧</span></p>
+      </div>
+      <div className="home-v3-header-actions">
+        <button type="button" className="home-v3-header-action" onClick={() => { haptic.tap(); setHistoryOpen(true) }} aria-label={labels.history}><History size={20}/></button>
+        <button type="button" className="home-v3-header-action" onClick={() => { haptic.tap(); setWardrobeOpen(true) }} aria-label={labels.skins}><HangerIcon/></button>
+      </div>
+    </motion.header>
+
+    <motion.section className="home-v3-balance-card" variants={item} aria-label={t('progress')}>
+      <div>
+        <p>{t('todayBalance')}</p>
+        <strong>{formatMl(today, language)} <small>{millilitres}</small></strong>
+        <span>{t('of')} {formatMl(goal, language)} {millilitres}</span>
+      </div>
+      <ProgressRing value={fillPercentage} label={`${completion}%`} size={102} stroke={8}/>
+    </motion.section>
+
+    <motion.section className="home-v3-summary-grid" variants={item}>
+      <div className="home-v3-summary-card">
+        <div><span>{labels.remaining}</span><strong>{remaining ? `${formatMl(remaining, language)} ${millilitres}` : t('goalReached')}</strong><small>{remaining ? labels.untilGoal : ''}</small></div>
+        <i><Droplets size={21}/></i>
+      </div>
+      <button type="button" className="home-v3-summary-card is-button" onClick={() => { haptic.tap(); setGoalOpen(true) }}>
+        <div><span>{labels.goal}</span><strong>{formatMl(goal, language)} {millilitres}</strong><small>{language === 'en' ? 'Edit target' : 'Изменить цель'}</small></div>
+        <i><PencilLine size={20}/></i>
+      </button>
+    </motion.section>
+
+    <motion.section className="home-v3-progress-card" variants={item}>
+      <div className="home-v3-progress-heading"><h2>{labels.progress}</h2><button type="button" onClick={() => setActiveTab('stats')} aria-label={language === 'en' ? 'Statistics' : 'Статистика'}><Trophy size={19}/></button></div>
+      <div className="home-v3-progress-content">
+        <div className="home-v3-progress-figure">
+          <div className="home-v3-scale" aria-hidden="true">{percentageMarks.map((mark) => <span key={mark}><b>{mark}%</b><i/></span>)}</div>
+          <BodyWater percentage={fillPercentage} skin={profile.skin}/>
+        </div>
+        <dl className="home-v3-metrics">
+          <div><i><Trophy size={17}/></i><dt>{labels.best}</dt><dd>{formatMl(bestDay.amount, language)} {millilitres}</dd><small>{bestDate}</small></div>
+          <div><i><Flame size={17}/></i><dt>{labels.streak}</dt><dd>{streak} {language === 'en' ? (streak === 1 ? 'day' : 'days') : (streak === 1 ? 'день' : streak > 1 && streak < 5 ? 'дня' : 'дней')}</dd><small>{labels.inRow}</small></div>
+          <div><i><Droplets size={17}/></i><dt>{labels.average}</dt><dd>{formatMl(weekAverage, language)} {millilitres}</dd><small>{labels.perDay}</small></div>
+        </dl>
+      </div>
+    </motion.section>
+
+    <motion.section className="home-v3-add-row" variants={item}>
+      <motion.button type="button" className="home-v3-add-water" onClick={() => { haptic.tap(); setSheetOpen(true) }} whileTap={{ scale: .985 }}>
+        <span className="home-v3-add-icon"><Plus size={26}/></span><span><b>{t('addWater')}</b><small>{labels.fast}</small></span><Droplets size={22}/>
+      </motion.button>
+      <button type="button" className="home-v3-history-button" onClick={() => { haptic.tap(); setHistoryOpen(true) }} aria-label={labels.history}><History size={21}/></button>
+    </motion.section>
+
+    <motion.form className="home-v3-custom-entry" variants={item} onSubmit={(event) => { event.preventDefault(); submitCustomAmount() }}>
+      <div className="home-v3-custom-label"><span>{t('customAmount')}</span><small>{language === 'en' ? 'Step 50 ml' : 'Шаг 50 мл'}</small></div>
+      <div className="home-v3-custom-controls">
+        <button type="button" onClick={() => adjustCustomAmount(-50)} aria-label={`-50 ${millilitres}`}><Minus size={18}/></button>
+        <label><input value={customAmount} onChange={(event) => setCustomAmount(event.target.value.replace(/\D/g, '').slice(0, 4))} onFocus={() => setIsEditingCustomAmount(true)} onBlur={() => setIsEditingCustomAmount(false)} inputMode="numeric" aria-label={t('customAmount')}/><span>{millilitres}</span></label>
+        <button type="button" onClick={() => adjustCustomAmount(50)} aria-label={`+50 ${millilitres}`}><Plus size={18}/></button>
+        <motion.button type="submit" className="home-v3-custom-submit" whileTap={{ scale: .96 }} disabled={!customAmount || Number(customAmount) > 5000}>{t('addWater')}</motion.button>
       </div>
     </motion.form>
-    <motion.section className="recent-card" variants={item} key={refreshVersion}><div className="section-row"><h2>{t('recentEntries')}</h2><button onClick={() => setHistoryOpen(true)}>{t('all')} <ChevronRight size={15}/></button></div>{recent.length ? <div className="recent-list">{recent.map((entry) => <div key={entry.id}><span className="drop-dot"><Droplets size={15}/></span><p>{formatMl(entry.amount, language)} {millilitres} <small>{new Date(entry.createdAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</small></p><button className="mini-delete" onClick={() => remove(entry.id)} aria-label={`${t('delete')} ${formatMl(entry.amount, language)} ${millilitres}`}><Trash2 size={15}/></button></div>)}</div> : <p className="empty-state">{t('firstEntry')}</p>}</motion.section>
-    <AddWaterSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onAdd={add}/><GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/><HistorySheet open={historyOpen} entries={intake} onClose={() => setHistoryOpen(false)} onDelete={remove} onClearAll={clearTodayWater}/><WardrobeSheet open={wardrobeOpen} skin={profile.skin} onClose={() => setWardrobeOpen(false)} onSelect={(skin) => { updateProfile({ skin }); setWardrobeOpen(false) }}/>
-    {toast !== null && <motion.div className="success-toast" initial={{ opacity: 0, y: 16, scale: .95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0 }}><span><Droplets size={17}/></span> +{toast} {millilitres} {t('added')}</motion.div>}
+
+    <motion.section className="home-v3-shortcuts" variants={item}>
+      <button type="button" onClick={() => { haptic.tap(); setActiveTab('stats') }}><i><Trophy size={20}/></i><strong>{language === 'en' ? 'Statistics' : 'Статистика'}</strong><small>{language === 'en' ? 'Analytics' : 'Аналитика'}</small></button>
+      <button type="button" onClick={() => { haptic.tap(); setGoalOpen(true) }}><i><PencilLine size={20}/></i><strong>{language === 'en' ? 'Goal' : 'Цели'}</strong><small>{language === 'en' ? 'Set target' : 'Поставить цель'}</small></button>
+      <button type="button" onClick={() => { haptic.tap(); setActiveTab('profile') }}><i><BellRing size={20}/></i><strong>{labels.reminders}</strong><small>{language === 'en' ? 'Set up' : 'Настроить'}</small></button>
+      <button type="button" onClick={() => { haptic.tap(); setWardrobeOpen(true) }}><i><HangerIcon/></i><strong>{labels.skins}</strong><small>{language === 'en' ? 'Choose look' : 'Выбрать образ'}</small></button>
+    </motion.section>
+
+    <AddWaterSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onAdd={add}/>
+    <GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/>
+    <HistorySheet open={historyOpen} entries={intake} onClose={() => setHistoryOpen(false)} onDelete={remove} onClearAll={clearTodayWater}/>
+    <WardrobeSheet open={wardrobeOpen} skin={profile.skin} onClose={() => setWardrobeOpen(false)} onSelect={(skin) => { updateProfile({ skin }); setWardrobeOpen(false) }}/>
+    {toast !== null && <motion.div className="success-toast" initial={{ opacity: 0, y: 16, scale: .95 }} animate={{ opacity: 1, y: 0, scale: 1 }}><span><Droplets size={17}/></span> +{toast} {millilitres} {t('added')}</motion.div>}
   </motion.main>
 }
 
