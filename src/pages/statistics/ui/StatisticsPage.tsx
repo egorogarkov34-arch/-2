@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { CalendarDays, ChevronDown, ChevronRight, Droplets, Flame, GlassWater, PencilLine, Share2, Trophy } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronRight, Droplets, Flame, GlassWater, PencilLine, Share2, Trophy, X } from 'lucide-react'
 import { useHydrationStore } from '@/entities/hydration/model/store'
 import type { IntakeEntry } from '@/entities/hydration/model/types'
 import { GoalSheet } from '@/features/goal/ui/GoalSheet'
@@ -174,6 +174,8 @@ export default function StatisticsPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth())
   const [goalSheetOpen, setGoalSheetOpen] = useState(false)
   const [historyExpanded, setHistoryExpanded] = useState(false)
+  const [selectedHistoryDay, setSelectedHistoryDay] = useState<DayTotal | null>(null)
+  const [distributionOpen, setDistributionOpen] = useState(false)
   const intake = useHydrationStore((state) => state.intake)
   const goal = useHydrationStore((state) => state.goal)
   const dayGoals = useHydrationStore((state) => state.dayGoals)
@@ -249,6 +251,10 @@ export default function StatisticsPage() {
     } catch { haptic.tap() }
   }
 
+  const selectedDayEntries = useMemo(() => selectedHistoryDay
+    ? intake.filter((entry) => todayKey(new Date(entry.createdAt)) === selectedHistoryDay.key).sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    : [], [intake, selectedHistoryDay])
+
   return <main className="page stats-page stats-v2-page">
     <header className="stats-v2-header">
       <p className="eyebrow">{language === 'ru' ? 'Ваш ритм' : 'Your rhythm'}</p>
@@ -294,16 +300,34 @@ export default function StatisticsPage() {
     </section>
 
     <section className="stats-v2-secondary-grid">
-      <article className="stats-v2-small-card distribution-card"><div className="stats-v2-card-title"><span>{language === 'ru' ? 'Распределение' : 'Distribution'}</span><ChevronRight size={16}/></div><div className="distribution-content"><div className="distribution-donut" style={{ background: donutBackground(statistics.distribution.map((item) => item.percent)) }}><i/></div><div className="distribution-legend">{statistics.distribution.map((item, index) => <div key={item.label}><i className={`dot-${index}`}/><span>{item.label}</span><b>{item.percent}%</b></div>)}</div></div></article>
+      <article className="stats-v2-small-card distribution-card"><div className="stats-v2-card-title"><span>{language === 'ru' ? 'Распределение' : 'Distribution'}</span><button type="button" className="stats-v2-card-action" onClick={() => { haptic.tap(); setDistributionOpen(true) }} aria-label={language === 'ru' ? 'Открыть распределение воды' : 'Open water distribution'}><ChevronRight size={16}/></button></div><div className="distribution-content"><div className="distribution-donut" style={{ background: donutBackground(statistics.distribution.map((item) => item.percent)) }}><i/></div><div className="distribution-legend">{statistics.distribution.map((item, index) => <div key={item.label}><i className={`dot-${index}`}/><span>{item.label}</span><b>{item.percent}%</b></div>)}</div></div></article>
       <article className="stats-v2-small-card time-card"><div className="stats-v2-card-title"><span>{language === 'ru' ? 'Среднее по времени' : 'Average by time'}</span></div><div className="stats-v2-time-chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={statistics.timePoints} margin={{ top: 8, right: 2, bottom: -4, left: -26 }}><CartesianGrid vertical={false} stroke="#FFFFFF09"/><YAxis width={29} tickFormatter={(value: number) => volume(value, locale, language)} axisLine={false} tickLine={false} tick={{ fill: '#77818b', fontSize: 8 }}/><XAxis dataKey="label" interval={1} axisLine={false} tickLine={false} tick={{ fill: '#7c858e', fontSize: 8 }}/><Tooltip content={<WaterTooltip format={(value) => volume(value, locale, language)}/>}/><Line type="monotone" dataKey="amount" stroke="#55AEFF" strokeWidth={2.4} dot={false} activeDot={{ r: 4, fill: '#0e1012', stroke: '#72baff', strokeWidth: 2 }}/></LineChart></ResponsiveContainer></div></article>
     </section>
 
     <section className="stats-v2-history-card">
       <div className="stats-v2-history-header"><span>{historyTitle}</span>{statistics.history.length > 5 && <button type="button" onClick={() => { haptic.tap(); setHistoryExpanded((value) => !value) }}>{historyExpanded ? (language === 'ru' ? 'Свернуть' : 'Collapse') : (language === 'ru' ? 'Подробнее' : 'Details')}</button>}</div>
-      {statistics.history.length ? <div className="stats-v2-history-list">{statistics.history.slice(0, historyExpanded ? undefined : 5).map((day) => <article key={day.key}><time>{new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(day.date)}</time><div><i style={{ width: `${day.ratio}%` }}/></div><strong>{volume(day.amount, locale, language)} <small>/ {volume(day.goal, locale, language)}</small></strong><ChevronRight size={15}/></article>)}</div> : <div className="stats-v2-empty-history">{language === 'ru' ? 'В выбранном периоде ещё нет записей воды.' : 'There are no water entries in this period yet.'}</div>}
+      {statistics.history.length ? <div className="stats-v2-history-list">{statistics.history.slice(0, historyExpanded ? undefined : 5).map((day) => <button type="button" className="stats-v2-history-row" key={day.key} onClick={() => { haptic.tap(); setSelectedHistoryDay(day) }} aria-label={language === 'ru' ? `Подробности за ${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(day.date)}` : `Details for ${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(day.date)}`}><time>{new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(day.date)}</time><div><i style={{ width: `${day.ratio}%` }}/></div><strong>{volume(day.amount, locale, language)} <small>/ {volume(day.goal, locale, language)}</small></strong><ChevronRight size={15}/></button>)}</div> : <div className="stats-v2-empty-history">{language === 'ru' ? 'В выбранном периоде ещё нет записей воды.' : 'There are no water entries in this period yet.'}</div>}
     </section>
 
     <GoalSheet open={goalSheetOpen} goal={goal} onClose={() => setGoalSheetOpen(false)} onSave={setGoal}/>
+    <AnimatePresence>
+      {selectedHistoryDay && <>
+        <motion.button className="sheet-scrim" aria-label={language === 'ru' ? 'Закрыть подробности дня' : 'Close day details'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedHistoryDay(null)}/>
+        <motion.section className="bottom-sheet compact-sheet stats-v2-detail-sheet" role="dialog" aria-modal="true" aria-label={language === 'ru' ? 'Подробности дня' : 'Day details'} initial={{ y: '105%' }} animate={{ y: 0 }} exit={{ y: '105%' }} transition={{ type: 'spring', stiffness: 320, damping: 31 }}>
+          <div className="sheet-handle"/><div className="sheet-heading"><div><p className="eyebrow">{language === 'ru' ? 'История воды' : 'Water history'}</p><h2>{new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(selectedHistoryDay.date)}</h2></div><button className="icon-button" onClick={() => setSelectedHistoryDay(null)} aria-label={language === 'ru' ? 'Закрыть' : 'Close'}><X size={20}/></button></div>
+          <div className="stats-v2-detail-summary"><div><span>{language === 'ru' ? 'Выпито' : 'Drank'}</span><strong>{volume(selectedHistoryDay.amount, locale, language)}</strong></div><div><span>{language === 'ru' ? 'Цель' : 'Goal'}</span><strong>{volume(selectedHistoryDay.goal, locale, language)}</strong></div><div><span>{language === 'ru' ? 'Выполнение' : 'Progress'}</span><strong>{Math.round((selectedHistoryDay.amount / Math.max(selectedHistoryDay.goal, 1)) * 100)}%</strong></div></div>
+          <div className="stats-v2-detail-list"><p>{language === 'ru' ? `Записи (${selectedDayEntries.length})` : `Entries (${selectedDayEntries.length})`}</p>{selectedDayEntries.map((entry) => <div key={entry.id}><span>{new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(new Date(entry.createdAt))}</span><strong>{volume(entry.amount, locale, language)}</strong></div>)}</div>
+        </motion.section>
+      </>}
+      {distributionOpen && <>
+        <motion.button className="sheet-scrim" aria-label={language === 'ru' ? 'Закрыть распределение' : 'Close distribution'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDistributionOpen(false)}/>
+        <motion.section className="bottom-sheet compact-sheet stats-v2-detail-sheet" role="dialog" aria-modal="true" aria-label={language === 'ru' ? 'Распределение воды' : 'Water distribution'} initial={{ y: '105%' }} animate={{ y: 0 }} exit={{ y: '105%' }} transition={{ type: 'spring', stiffness: 320, damping: 31 }}>
+          <div className="sheet-handle"/><div className="sheet-heading"><div><p className="eyebrow">{periodTitle}</p><h2>{language === 'ru' ? 'Распределение воды' : 'Water distribution'}</h2></div><button className="icon-button" onClick={() => setDistributionOpen(false)} aria-label={language === 'ru' ? 'Закрыть' : 'Close'}><X size={20}/></button></div>
+          <p className="stats-v2-detail-note">{selectedDateLabel}</p>
+          <div className="stats-v2-distribution-list">{statistics.distribution.map((item, index) => <div key={item.label}><span className={`dot-${index}`}/><strong>{item.label}</strong><b>{volume(item.amount, locale, language)}</b><small>{item.percent}%</small></div>)}</div>
+        </motion.section>
+      </>}
+    </AnimatePresence>
   </main>
 }
 
