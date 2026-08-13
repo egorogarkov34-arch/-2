@@ -26,6 +26,13 @@ interface ChartPoint {
   goal: number
 }
 
+interface HistoryItem extends DayTotal {
+  start: Date
+  end: Date
+  kind: 'day' | 'month'
+  ratio: number
+}
+
 const dayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
 const addDays = (date: Date, amount: number) => {
   const next = new Date(date)
@@ -55,6 +62,12 @@ function volume(value: number, locale: string, language: Language) {
 function monthName(date: Date, locale: string) {
   const text = new Intl.DateTimeFormat(locale, { month: 'long' }).format(date)
   return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+function historyItemLabel(item: HistoryItem, locale: string) {
+  return item.kind === 'month'
+    ? monthName(item.date, locale)
+    : new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(item.date)
 }
 
 function periodRange(period: Period, year: number, month: number, now: Date) {
@@ -174,7 +187,7 @@ export default function StatisticsPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth())
   const [goalSheetOpen, setGoalSheetOpen] = useState(false)
   const [historyExpanded, setHistoryExpanded] = useState(false)
-  const [selectedHistoryDay, setSelectedHistoryDay] = useState<DayTotal | null>(null)
+  const [selectedHistoryDay, setSelectedHistoryDay] = useState<HistoryItem | null>(null)
   const [distributionOpen, setDistributionOpen] = useState(false)
   const intake = useHydrationStore((state) => state.intake)
   const goal = useHydrationStore((state) => state.goal)
@@ -211,7 +224,32 @@ export default function StatisticsPage() {
     const dailyGoal = visibleDays.length ? Math.round(visibleDays.reduce((sum, day) => sum + day.goal, 0) / visibleDays.length) : goal
     const maxDay = visibleDays.reduce<DayTotal | null>((best, day) => !best || day.amount > best.amount ? day : best, null)
     const goalDays = visibleDays.filter((day) => day.amount >= day.goal && day.goal > 0).length
-    const history = visibleDays.filter((day) => day.amount > 0).reverse().map((day) => ({ ...day, ratio: Math.min(100, Math.round((day.amount / Math.max(day.goal, 1)) * 100)) }))
+    const goalDaysTarget = period === 'year' ? allDays.length : visibleDays.length
+    const history: HistoryItem[] = period === 'year'
+      ? Array.from({ length: 12 }, (_, month) => {
+          const start = new Date(selectedYear, month, 1)
+          const end = new Date(selectedYear, month + 1, 0)
+          const monthDays = allDays.filter((day) => day.date.getMonth() === month)
+          const amount = monthDays.reduce((sum, day) => sum + day.amount, 0)
+          const monthGoal = monthDays.reduce((sum, day) => sum + day.goal, 0)
+          return {
+            key: `${selectedYear}-${String(month + 1).padStart(2, '0')}`,
+            date: start,
+            start,
+            end,
+            kind: 'month' as const,
+            amount,
+            goal: monthGoal,
+            ratio: Math.min(100, Math.round((amount / Math.max(monthGoal, 1)) * 100)),
+          }
+        }).reverse()
+      : visibleDays.filter((day) => day.amount > 0).reverse().map((day) => ({
+          ...day,
+          start: day.date,
+          end: day.date,
+          kind: 'day' as const,
+          ratio: Math.min(100, Math.round((day.amount / Math.max(day.goal, 1)) * 100)),
+        }))
     return {
       data,
       total,
@@ -219,6 +257,7 @@ export default function StatisticsPage() {
       dailyGoal,
       maxDay,
       goalDays,
+      goalDaysTarget,
       visibleDays,
       history,
       entries,
@@ -229,7 +268,7 @@ export default function StatisticsPage() {
 
   const streak = calculateStreak(buildAmounts(intake), dayGoals, goal, now)
   const periodTitle = language === 'ru' ? (period === 'week' ? 'Неделя' : period === 'month' ? 'Месяц' : 'Год') : (period === 'week' ? 'Week' : period === 'month' ? 'Month' : 'Year')
-  const historyTitle = language === 'ru' ? `История за ${period === 'week' ? 'неделю' : period === 'month' ? 'месяц' : 'год'}` : `${periodTitle} history`
+  const historyTitle = language === 'ru' ? (period === 'year' ? `Месяцы ${selectedYear} года` : `История за ${period === 'week' ? 'неделю' : 'месяц'}`) : (period === 'year' ? `${selectedYear} months` : `${periodTitle} history`)
   const maxAmount = Math.max(statistics.dailyGoal, ...statistics.data.map((entry) => entry.amount), 1000)
   const axisMax = Math.ceil(maxAmount / 500) * 500
   const axisTicks = [0, axisMax / 3, (axisMax / 3) * 2, axisMax].map((value) => Math.round(value))
@@ -252,7 +291,10 @@ export default function StatisticsPage() {
   }
 
   const selectedDayEntries = useMemo(() => selectedHistoryDay
-    ? intake.filter((entry) => todayKey(new Date(entry.createdAt)) === selectedHistoryDay.key).sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    ? intake.filter((entry) => {
+        const createdAt = new Date(entry.createdAt)
+        return createdAt >= dayStart(selectedHistoryDay.start) && createdAt < addDays(dayStart(selectedHistoryDay.end), 1)
+      }).sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     : [], [intake, selectedHistoryDay])
 
   return <main className="page stats-page stats-v2-page">
@@ -294,7 +336,7 @@ export default function StatisticsPage() {
 
     <section className="stats-v2-metrics" aria-label={language === 'ru' ? 'Показатели' : 'Key metrics'}>
       <Metric icon={Droplets} label={language === 'ru' ? 'Всего выпито' : 'Total intake'} value={volume(statistics.total, locale, language)} tone="blue"/>
-      <Metric icon={GlassWater} label={language === 'ru' ? 'Дней с целью' : 'Goal days'} value={language === 'ru' ? `${statistics.goalDays} из ${statistics.visibleDays.length}` : `${statistics.goalDays} of ${statistics.visibleDays.length}`} tone="cyan"/>
+      <Metric icon={GlassWater} label={language === 'ru' ? 'Дней с целью' : 'Goal days'} value={language === 'ru' ? `${statistics.goalDays} из ${statistics.goalDaysTarget}` : `${statistics.goalDays} of ${statistics.goalDaysTarget}`} tone="cyan"/>
       <Metric icon={Flame} label={language === 'ru' ? 'Серия' : 'Streak'} value={streakLabel(streak, language)} tone="orange"/>
       <Metric icon={Trophy} label={language === 'ru' ? 'Лучший день' : 'Best day'} value={statistics.maxDay ? volume(statistics.maxDay.amount, locale, language) : volume(0, locale, language)} caption={statistics.maxDay?.amount ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(statistics.maxDay.date) : (language === 'ru' ? 'Пока нет записей' : 'No entries yet')} tone="gold"/>
     </section>
@@ -306,7 +348,7 @@ export default function StatisticsPage() {
 
     <section className="stats-v2-history-card">
       <div className="stats-v2-history-header"><span>{historyTitle}</span>{statistics.history.length > 5 && <button type="button" onClick={() => { haptic.tap(); setHistoryExpanded((value) => !value) }}>{historyExpanded ? (language === 'ru' ? 'Свернуть' : 'Collapse') : (language === 'ru' ? 'Подробнее' : 'Details')}</button>}</div>
-      {statistics.history.length ? <div className="stats-v2-history-list">{statistics.history.slice(0, historyExpanded ? undefined : 5).map((day) => <button type="button" className="stats-v2-history-row" key={day.key} onClick={() => { haptic.tap(); setSelectedHistoryDay(day) }} aria-label={language === 'ru' ? `Подробности за ${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(day.date)}` : `Details for ${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(day.date)}`}><time>{new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(day.date)}</time><div><i style={{ width: `${day.ratio}%` }}/></div><strong>{volume(day.amount, locale, language)} <small>/ {volume(day.goal, locale, language)}</small></strong><ChevronRight size={15}/></button>)}</div> : <div className="stats-v2-empty-history">{language === 'ru' ? 'В выбранном периоде ещё нет записей воды.' : 'There are no water entries in this period yet.'}</div>}
+      {statistics.history.length ? <div className="stats-v2-history-list">{statistics.history.slice(0, historyExpanded ? undefined : 5).map((day) => <button type="button" className="stats-v2-history-row" key={day.key} onClick={() => { haptic.tap(); setSelectedHistoryDay(day) }} aria-label={language === 'ru' ? `Подробности за ${historyItemLabel(day, locale)}` : `Details for ${historyItemLabel(day, locale)}`}><time>{historyItemLabel(day, locale)}</time><div><i style={{ width: `${day.ratio}%` }}/></div><strong>{volume(day.amount, locale, language)} <small>/ {volume(day.goal, locale, language)}</small></strong><ChevronRight size={15}/></button>)}</div> : <div className="stats-v2-empty-history">{language === 'ru' ? 'В выбранном периоде ещё нет записей воды.' : 'There are no water entries in this period yet.'}</div>}
     </section>
 
     <GoalSheet open={goalSheetOpen} goal={goal} onClose={() => setGoalSheetOpen(false)} onSave={setGoal}/>
@@ -314,7 +356,7 @@ export default function StatisticsPage() {
       {selectedHistoryDay && <>
         <motion.button className="sheet-scrim" aria-label={language === 'ru' ? 'Закрыть подробности дня' : 'Close day details'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedHistoryDay(null)}/>
         <motion.section className="bottom-sheet compact-sheet stats-v2-detail-sheet" role="dialog" aria-modal="true" aria-label={language === 'ru' ? 'Подробности дня' : 'Day details'} initial={{ y: '105%' }} animate={{ y: 0 }} exit={{ y: '105%' }} transition={{ type: 'spring', stiffness: 320, damping: 31 }}>
-          <div className="sheet-handle"/><div className="sheet-heading"><div><p className="eyebrow">{language === 'ru' ? 'История воды' : 'Water history'}</p><h2>{new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(selectedHistoryDay.date)}</h2></div><button className="icon-button" onClick={() => setSelectedHistoryDay(null)} aria-label={language === 'ru' ? 'Закрыть' : 'Close'}><X size={20}/></button></div>
+          <div className="sheet-handle"/><div className="sheet-heading"><div><p className="eyebrow">{selectedHistoryDay.kind === 'month' ? (language === 'ru' ? 'Статистика за месяц' : 'Monthly statistics') : (language === 'ru' ? 'История воды' : 'Water history')}</p><h2>{historyItemLabel(selectedHistoryDay, locale)}</h2></div><button className="icon-button" onClick={() => setSelectedHistoryDay(null)} aria-label={language === 'ru' ? 'Закрыть' : 'Close'}><X size={20}/></button></div>
           <div className="stats-v2-detail-summary"><div><span>{language === 'ru' ? 'Выпито' : 'Drank'}</span><strong>{volume(selectedHistoryDay.amount, locale, language)}</strong></div><div><span>{language === 'ru' ? 'Цель' : 'Goal'}</span><strong>{volume(selectedHistoryDay.goal, locale, language)}</strong></div><div><span>{language === 'ru' ? 'Выполнение' : 'Progress'}</span><strong>{Math.round((selectedHistoryDay.amount / Math.max(selectedHistoryDay.goal, 1)) * 100)}%</strong></div></div>
           <div className="stats-v2-detail-list"><p>{language === 'ru' ? `Записи (${selectedDayEntries.length})` : `Entries (${selectedDayEntries.length})`}</p>{selectedDayEntries.map((entry) => <div key={entry.id}><span>{new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(new Date(entry.createdAt))}</span><strong>{volume(entry.amount, locale, language)}</strong></div>)}</div>
         </motion.section>
