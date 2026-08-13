@@ -1,315 +1,319 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ChevronDown, Flame, Trophy } from 'lucide-react'
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { CalendarDays, ChevronDown, ChevronRight, Droplets, Flame, GlassWater, PencilLine, Share2, Trophy } from 'lucide-react'
 import { useHydrationStore } from '@/entities/hydration/model/store'
 import type { IntakeEntry } from '@/entities/hydration/model/types'
-import { useTranslation } from '@/shared/lib/i18n'
+import { GoalSheet } from '@/features/goal/ui/GoalSheet'
 import { todayKey } from '@/shared/lib/format'
+import { haptic } from '@/shared/lib/telegram'
+import { useTranslation } from '@/shared/lib/i18n'
 
-const periods = [
-  { id: 'week', key: 'week' },
-  { id: 'month', key: 'month' },
-  { id: 'year', key: 'year' },
-] as const
+const periods = ['week', 'month', 'year'] as const
+type Period = (typeof periods)[number]
+type Language = 'ru' | 'en'
 
-type Period = (typeof periods)[number]['id']
+interface DayTotal {
+  date: Date
+  key: string
+  amount: number
+  goal: number
+}
 
 interface ChartPoint {
   label: string
   amount: number
+  goal: number
 }
 
-const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
+const dayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
+const addDays = (date: Date, amount: number) => {
+  const next = new Date(date)
+  next.setDate(next.getDate() + amount)
+  return next
+}
+const startOfWeek = (date: Date) => addDays(dayStart(date), -((date.getDay() + 6) % 7))
 
-const addDays = (date: Date, days: number) => {
-  const result = new Date(date)
-  result.setDate(result.getDate() + days)
+function datesBetween(start: Date, end: Date) {
+  const result: Date[] = []
+  for (let date = dayStart(start); date <= end; date = addDays(date, 1)) result.push(date)
   return result
 }
 
-// ISO week: Monday is always the first day and Sunday is the last.
-const startOfWeek = (date: Date) => {
-  const day = startOfDay(date)
-  const daysSinceMonday = (day.getDay() + 6) % 7
-  return addDays(day, -daysSinceMonday)
-}
-
-const getDateRange = (start: Date, end: Date) => {
-  const dates: Date[] = []
-  for (let current = startOfDay(start); current <= end; current = addDays(current, 1)) {
-    dates.push(current)
-  }
-  return dates
-}
-
-function buildAmountByDay(intake: IntakeEntry[]) {
-  return intake.reduce<Record<string, number>>((amounts, entry) => {
+function buildAmounts(entries: IntakeEntry[]) {
+  return entries.reduce<Record<string, number>>((totals, entry) => {
     const key = todayKey(new Date(entry.createdAt))
-    amounts[key] = (amounts[key] ?? 0) + entry.amount
-    return amounts
+    totals[key] = (totals[key] ?? 0) + entry.amount
+    return totals
   }, {})
 }
 
-function calculateStreak(amountsByDay: Record<string, number>, dayGoals: Record<string, number>, fallbackGoal: number, now: Date) {
-  const today = startOfDay(now)
-  const reachedGoal = (date: Date) => {
-    const key = todayKey(date)
-    const goal = dayGoals[key] ?? fallbackGoal
-    return goal > 0 && (amountsByDay[key] ?? 0) >= goal
+function volume(value: number, locale: string, language: Language) {
+  return `${(value / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} ${language === 'ru' ? 'л' : 'L'}`
+}
+
+function monthName(date: Date, locale: string) {
+  const text = new Intl.DateTimeFormat(locale, { month: 'long' }).format(date)
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+function periodRange(period: Period, year: number, month: number, now: Date) {
+  if (period === 'week') {
+    const start = startOfWeek(now)
+    return { start, end: addDays(start, 6), visibleEnd: now }
   }
-  // An unfinished current day must not erase a streak completed through yesterday.
-  let date = reachedGoal(today) ? today : addDays(today, -1)
+
+  if (period === 'month') {
+    const start = new Date(year, month, 1)
+    const end = new Date(year, month + 1, 0)
+    const visibleEnd = year === now.getFullYear() && month === now.getMonth() ? now : end
+    return { start, end, visibleEnd }
+  }
+
+  const start = new Date(year, 0, 1)
+  const end = new Date(year, 11, 31)
+  return { start, end, visibleEnd: year === now.getFullYear() ? now : end }
+}
+
+function calculateStreak(amounts: Record<string, number>, goals: Record<string, number>, fallbackGoal: number, now: Date) {
+  const reached = (date: Date) => (amounts[todayKey(date)] ?? 0) >= (goals[todayKey(date)] ?? fallbackGoal)
+  let cursor = reached(now) ? dayStart(now) : addDays(dayStart(now), -1)
   let streak = 0
-
-  while (reachedGoal(date)) {
+  while (reached(cursor)) {
     streak += 1
-    date = addDays(date, -1)
+    cursor = addDays(cursor, -1)
   }
-
   return streak
 }
 
-function formatStreak(streak: number, language: 'ru' | 'en') {
-  if (language === 'en') return `${streak} ${streak === 1 ? 'day' : 'days'}`
-  const lastTwoDigits = streak % 100
-  const lastDigit = streak % 10
-  const label = lastTwoDigits >= 11 && lastTwoDigits <= 14
-    ? '\u0434\u043d\u0435\u0439'
-    : lastDigit === 1
-      ? '\u0434\u0435\u043d\u044c'
-      : lastDigit >= 2 && lastDigit <= 4
-        ? '\u0434\u043d\u044f'
-        : '\u0434\u043d\u0435\u0439'
-  return `${streak} ${label}`
+function streakLabel(value: number, language: Language) {
+  if (language === 'en') return `${value} ${value === 1 ? 'day' : 'days'}`
+  const tail = value % 100
+  const last = value % 10
+  const word = tail >= 11 && tail <= 14 ? 'дней' : last === 1 ? 'день' : last >= 2 && last <= 4 ? 'дня' : 'дней'
+  return `${value} ${word}`
 }
 
-function getChartData(
-  period: Period,
-  amountsByDay: Record<string, number>,
-  locale: string,
-  now: Date,
-  selectedYear: number,
-  selectedMonth: number,
-): ChartPoint[] {
+function bucketAverage(days: DayTotal[]) {
+  if (!days.length) return 0
+  return Math.round(days.reduce((sum, day) => sum + day.amount, 0) / days.length)
+}
+
+function chartData(period: Period, days: DayTotal[], locale: string) {
   if (period === 'week') {
-    const monday = startOfWeek(now)
-    return getDateRange(monday, addDays(monday, 6)).map((date) => ({
-      label: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date).replace('.', ''),
-      amount: amountsByDay[todayKey(date)] ?? 0,
+    return days.map((day) => ({
+      label: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(day.date).replace('.', ''),
+      amount: day.amount,
+      goal: day.goal,
     }))
   }
 
   if (period === 'month') {
-    const year = now.getFullYear()
-    const month = selectedMonth
-    const monthEnd = new Date(year, month + 1, 0)
-    const daysInMonth = monthEnd.getDate()
-
-    return Array.from({ length: 4 }, (_, weekIndex) => {
-      const firstDay = weekIndex * 7 + 1
-      const lastDay = weekIndex === 3 ? daysInMonth : Math.min(firstDay + 6, daysInMonth)
-      const weekStart = new Date(year, month, firstDay)
-      const weekEnd = new Date(year, month, lastDay)
-      const amount = getDateRange(weekStart, weekEnd)
-        .reduce((total, date) => total + (amountsByDay[todayKey(date)] ?? 0), 0)
-
-      return { label: `${firstDay}\u2013${lastDay}`, amount }
-    })
+    const buckets: ChartPoint[] = []
+    for (let index = 0; index < days.length; index += 7) {
+      const bucket = days.slice(index, index + 7)
+      const first = bucket[0]?.date.getDate() ?? 1
+      const last = bucket.at(-1)?.date.getDate() ?? first
+      buckets.push({
+        label: `${first}–${last}`,
+        amount: bucketAverage(bucket),
+        goal: Math.round(bucket.reduce((sum, day) => sum + day.goal, 0) / Math.max(bucket.length, 1)),
+      })
+    }
+    return buckets
   }
 
-  return Array.from({ length: 12 }, (_, month) => {
-    const monthStart = new Date(selectedYear, month, 1)
-    const monthEnd = new Date(selectedYear, month + 1, 0)
-    const amount = getDateRange(monthStart, monthEnd)
-      .reduce((total, date) => total + (amountsByDay[todayKey(date)] ?? 0), 0)
+  const months = Array.from({ length: 12 }, () => [] as DayTotal[])
+  days.forEach((day) => months[day.date.getMonth()]?.push(day))
+  return months.map((monthDays, index) => ({
+    label: new Intl.DateTimeFormat(locale, { month: 'short' }).format(new Date(days[0]?.date.getFullYear() ?? new Date().getFullYear(), index, 1)).replace('.', ''),
+    amount: bucketAverage(monthDays),
+    goal: Math.round(monthDays.reduce((sum, day) => sum + day.goal, 0) / Math.max(monthDays.length, 1)),
+  }))
+}
 
-    return {
-      label: new Intl.DateTimeFormat(locale, { month: 'short' }).format(monthStart).replace('.', ''),
-      amount,
-    }
+function makeTimePoints(entries: IntakeEntry[], daysCount: number) {
+  const hours = Array.from({ length: 24 }, () => 0)
+  entries.forEach((entry) => { hours[new Date(entry.createdAt).getHours()] += entry.amount })
+  return Array.from({ length: 8 }, (_, index) => {
+    const hour = index * 3
+    const total = hours.slice(hour, hour + 3).reduce((sum, value) => sum + value, 0)
+    return { label: String(hour).padStart(2, '0'), amount: Math.round(total / Math.max(daysCount, 1)) }
   })
 }
 
-function getActiveDates(period: Period, now: Date, selectedYear: number, selectedMonth: number) {
-  if (period === 'week') return getDateRange(startOfWeek(now), now)
-  if (period === 'month') {
-    const monthEnd = new Date(now.getFullYear(), selectedMonth + 1, 0)
-    const endDate = selectedMonth === now.getMonth() ? now : monthEnd
-    return getDateRange(new Date(now.getFullYear(), selectedMonth, 1), endDate)
-  }
-  const yearEnd = selectedYear === now.getFullYear() ? now : new Date(selectedYear, 11, 31)
-  return getDateRange(new Date(selectedYear, 0, 1), yearEnd)
+function getDistribution(entries: IntakeEntry[], language: Language) {
+  const labels = language === 'ru'
+    ? ['Утро', 'День', 'Вечер', 'Ночь']
+    : ['Morning', 'Day', 'Evening', 'Night']
+  const totals = [0, 0, 0, 0]
+  entries.forEach((entry) => {
+    const hour = new Date(entry.createdAt).getHours()
+    const index = hour >= 6 && hour < 12 ? 0 : hour >= 12 && hour < 18 ? 1 : hour >= 18 ? 2 : 3
+    totals[index] += entry.amount
+  })
+  const sum = totals.reduce((result, value) => result + value, 0)
+  return labels.map((label, index) => ({ label, amount: totals[index] ?? 0, percent: sum ? Math.round(((totals[index] ?? 0) / sum) * 100) : 0 }))
+}
+
+function donutBackground(parts: number[]) {
+  const colors = ['#63B7FF', '#237BE6', '#8CC65B', '#F4CC5A']
+  if (!parts.some((part) => part > 0)) return '#2A2E33'
+  let cursor = 0
+  return `conic-gradient(${parts.map((part, index) => {
+    const next = cursor + part
+    const slice = `${colors[index]} ${cursor}% ${next}%`
+    cursor = next
+    return slice
+  }).join(', ')})`
 }
 
 export default function StatisticsPage() {
-  const [period, setPeriod] = useState<Period>('week')
+  const [period, setPeriod] = useState<Period>('month')
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth())
+  const [goalSheetOpen, setGoalSheetOpen] = useState(false)
+  const [historyExpanded, setHistoryExpanded] = useState(false)
   const intake = useHydrationStore((state) => state.intake)
   const goal = useHydrationStore((state) => state.goal)
   const dayGoals = useHydrationStore((state) => state.dayGoals)
-  const { language, t } = useTranslation()
-  const locale = language === 'en' ? 'en-US' : 'ru-RU'
+  const setGoal = useHydrationStore((state) => state.setGoal)
+  const { language } = useTranslation()
+  const locale = language === 'ru' ? 'ru-RU' : 'en-US'
   const now = new Date()
-  const dayKey = todayKey(now)
-  const formatVolume = (value: number) => `${(value / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} ${t('litres')}`
+
   const availableYears = useMemo(() => {
-    const currentYear = now.getFullYear()
-    const intakeYears = intake.map((entry) => new Date(entry.createdAt).getFullYear())
-    return [...new Set([currentYear, ...intakeYears])].sort((first, second) => second - first)
-  }, [intake, now.getFullYear()])
+    const years = new Set([now.getFullYear()])
+    intake.forEach((entry) => years.add(new Date(entry.createdAt).getFullYear()))
+    Object.keys(dayGoals).forEach((key) => years.add(new Date(`${key}T12:00:00`).getFullYear()))
+    return [...years].sort((left, right) => right - left)
+  }, [dayGoals, intake, now.getFullYear()])
 
-  const { data, activeDates, amountsByDay } = useMemo(() => {
-    const totals = buildAmountByDay(intake)
+  const statistics = useMemo(() => {
+    const amounts = buildAmounts(intake)
+    const range = periodRange(period, selectedYear, selectedMonth, now)
+    const allDays = datesBetween(range.start, range.end).map((date) => ({
+      date,
+      key: todayKey(date),
+      amount: amounts[todayKey(date)] ?? 0,
+      goal: dayGoals[todayKey(date)] ?? goal,
+    }))
+    const visibleDays = allDays.filter((day) => day.date <= dayStart(range.visibleEnd))
+    const entries = intake.filter((entry) => {
+      const date = new Date(entry.createdAt)
+      return date >= range.start && date <= range.visibleEnd
+    })
+    const data = chartData(period, allDays, locale)
+    const total = visibleDays.reduce((sum, day) => sum + day.amount, 0)
+    const average = bucketAverage(visibleDays)
+    const dailyGoal = visibleDays.length ? Math.round(visibleDays.reduce((sum, day) => sum + day.goal, 0) / visibleDays.length) : goal
+    const maxDay = visibleDays.reduce<DayTotal | null>((best, day) => !best || day.amount > best.amount ? day : best, null)
+    const goalDays = visibleDays.filter((day) => day.amount >= day.goal && day.goal > 0).length
+    const history = visibleDays.filter((day) => day.amount > 0).reverse().map((day) => ({ ...day, ratio: Math.min(100, Math.round((day.amount / Math.max(day.goal, 1)) * 100)) }))
     return {
-      amountsByDay: totals,
-      data: getChartData(period, totals, locale, now, selectedYear, selectedMonth),
-      activeDates: getActiveDates(period, now, selectedYear, selectedMonth),
+      data,
+      total,
+      average,
+      dailyGoal,
+      maxDay,
+      goalDays,
+      visibleDays,
+      history,
+      entries,
+      distribution: getDistribution(entries, language),
+      timePoints: makeTimePoints(entries, visibleDays.length),
     }
-  }, [dayKey, intake, locale, period, selectedMonth, selectedYear])
+  }, [dayGoals, goal, intake, language, locale, period, selectedMonth, selectedYear])
 
-  const total = data.reduce((sum, entry) => sum + entry.amount, 0)
-  const average = activeDates.length
-    ? Math.round(activeDates.reduce((sum, date) => sum + (amountsByDay[todayKey(date)] ?? 0), 0) / activeDates.length)
-    : 0
-  const max = Math.max(0, ...data.map((entry) => entry.amount))
-  const axisUpperBound = max === 0 ? 1000 : Math.max(500, Math.ceil(max / 500) * 500)
-  const axisTicks = [0, 1, 2, 3].map((step) => Math.round((axisUpperBound * step) / 3))
-  const record = Math.max(0, ...Object.values(amountsByDay))
-  const streak = calculateStreak(amountsByDay, dayGoals, goal, now)
-  const cards = [
-    { label: t('streak'), value: formatStreak(streak, language), icon: Flame, tone: 'orange' },
-    { label: t('personalRecord'), value: formatVolume(record), icon: Trophy, tone: 'blue' },
-  ]
-  const periodLabel = t(periods.find((entry) => entry.id === period)?.key ?? 'week')
-  const monthOptions = Array.from({ length: 12 }, (_, month) => ({
-    value: month,
-    label: new Intl.DateTimeFormat(locale, { month: 'long' }).format(new Date(now.getFullYear(), month, 1)),
-  }))
-  const trendLabel = language === 'ru'
-    ? period === 'week'
-      ? '\u0422\u0440\u0435\u043d\u0434 \u0437\u0430 7 \u0434\u043d\u0435\u0439'
-      : period === 'month'
-        ? '\u0422\u0440\u0435\u043d\u0434 \u0437\u0430 \u043c\u0435\u0441\u044f\u0446'
-        : '\u0422\u0440\u0435\u043d\u0434 \u0437\u0430 \u0433\u043e\u0434'
-    : period === 'week'
-      ? '7-day trend'
-      : period === 'month'
-        ? 'Monthly trend'
-        : 'Yearly trend'
-  const bestResultLabel = language === 'ru'
-    ? '\u041b\u0443\u0447\u0448\u0438\u0439 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442 \u0437\u0430 \u043f\u0435\u0440\u0438\u043e\u0434'
-    : 'Best result in this period'
-  const yearlyTickSize = period === 'year' ? 8 : 11
+  const streak = calculateStreak(buildAmounts(intake), dayGoals, goal, now)
+  const periodTitle = language === 'ru' ? (period === 'week' ? 'Неделя' : period === 'month' ? 'Месяц' : 'Год') : (period === 'week' ? 'Week' : period === 'month' ? 'Month' : 'Year')
+  const historyTitle = language === 'ru' ? `История за ${period === 'week' ? 'неделю' : period === 'month' ? 'месяц' : 'год'}` : `${periodTitle} history`
+  const maxAmount = Math.max(statistics.dailyGoal, ...statistics.data.map((entry) => entry.amount), 1000)
+  const axisMax = Math.ceil(maxAmount / 500) * 500
+  const axisTicks = [0, axisMax / 3, (axisMax / 3) * 2, axisMax].map((value) => Math.round(value))
+  const months = Array.from({ length: 12 }, (_, month) => ({ value: month, label: monthName(new Date(selectedYear, month, 1), locale) }))
+  const selectedDateLabel = period === 'month'
+    ? `${monthName(new Date(selectedYear, selectedMonth, 1), locale)} ${selectedYear}`
+    : period === 'year'
+      ? String(selectedYear)
+      : `${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(startOfWeek(now))} – ${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(addDays(startOfWeek(now), 6))}`
 
-  return (
-    <main className="page stats-page">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">{t('yourRhythm')}</p>
-          <h1>{t('stats')}</h1>
-        </div>
-      </header>
+  const shareStats = async () => {
+    const text = language === 'ru'
+      ? `Мой водный баланс Aquora: ${volume(statistics.total, locale, language)} за ${periodTitle.toLowerCase()}. Среднее — ${volume(statistics.average, locale, language)} в день.`
+      : `My Aquora water balance: ${volume(statistics.total, locale, language)} this ${periodTitle.toLowerCase()}. Average — ${volume(statistics.average, locale, language)} a day.`
+    try {
+      if (navigator.share) await navigator.share({ title: 'Aquora Water', text })
+      else await navigator.clipboard.writeText(text)
+      haptic.success()
+    } catch { haptic.tap() }
+  }
 
-      <div className="period-tabs" role="tablist">
-        {periods.map(({ id, key }) => (
-          <button key={id} className={id === period ? 'active' : ''} onClick={() => setPeriod(id)}>
-            {t(key)}
-          </button>
-        ))}
+  return <main className="page stats-page stats-v2-page">
+    <header className="stats-v2-header">
+      <p className="eyebrow">{language === 'ru' ? 'Ваш ритм' : 'Your rhythm'}</p>
+      <h1>{language === 'ru' ? 'Статистика' : 'Insights'}</h1>
+    </header>
+
+    <nav className="period-tabs stats-v2-tabs" aria-label={language === 'ru' ? 'Период статистики' : 'Statistics period'}>
+      {periods.map((item) => <button key={item} type="button" className={period === item ? 'active' : ''} onClick={() => { haptic.tap(); setPeriod(item) }}>{item === 'week' ? (language === 'ru' ? 'Неделя' : 'Week') : item === 'month' ? (language === 'ru' ? 'Месяц' : 'Month') : (language === 'ru' ? 'Год' : 'Year')}</button>)}
+    </nav>
+
+    <section className="stats-v2-filter" aria-label={language === 'ru' ? 'Выбор периода' : 'Period selector'}>
+      <CalendarDays size={16}/>
+      <span>{periodTitle}</span>
+      {period === 'month' && <><label><select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))} aria-label={language === 'ru' ? 'Месяц' : 'Month'}>{months.map((month) => <option value={month.value} key={month.value}>{month.label}</option>)}</select><ChevronDown size={14}/></label><label className="stats-v2-year-select"><select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} aria-label={language === 'ru' ? 'Год' : 'Year'}>{availableYears.map((year) => <option value={year} key={year}>{year}</option>)}</select><ChevronDown size={14}/></label></>}
+      {period === 'year' && <label><select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} aria-label={language === 'ru' ? 'Год' : 'Year'}>{availableYears.map((year) => <option value={year} key={year}>{year}</option>)}</select><ChevronDown size={14}/></label>}
+      {period === 'week' && <strong>{selectedDateLabel}</strong>}
+      <button type="button" onClick={() => void shareStats()} aria-label={language === 'ru' ? 'Поделиться статистикой' : 'Share statistics'}><Share2 size={19}/></button>
+    </section>
+
+    <motion.section className="stats-v2-main-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="stats-v2-main-top">
+        <div><span>{language === 'ru' ? 'В среднем за день' : 'Daily average'}</span><strong>{volume(statistics.average, locale, language)}</strong></div>
+        <button type="button" onClick={() => setGoalSheetOpen(true)}><span>{language === 'ru' ? 'Цель в день' : 'Daily goal'}</span><b>{volume(statistics.dailyGoal, locale, language)}</b><i><PencilLine size={14}/></i></button>
       </div>
+      <div className="stats-v2-chart stats-v2-bar-chart">
+        <ResponsiveContainer width="100%" height="100%"><BarChart data={statistics.data} barSize={period === 'year' ? 15 : 27} margin={{ top: 10, right: 0, bottom: 0, left: -20 }}>
+          <defs><linearGradient id="statsMainBar" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#72C0FF"/><stop offset="1" stopColor="#2377EA"/></linearGradient></defs>
+          <CartesianGrid vertical={false} stroke="#FFFFFF0B"/>
+          <YAxis width={44} domain={[0, axisMax]} ticks={axisTicks} tickFormatter={(value: number) => volume(value, locale, language)} axisLine={false} tickLine={false} tick={{ fill: '#89919a', fontSize: 10 }}/>
+          <XAxis dataKey="label" interval={0} minTickGap={period === 'year' ? 2 : 0} axisLine={false} tickLine={false} tick={{ fill: '#949ba3', fontSize: period === 'year' ? 9 : 11 }}/>
+          <Tooltip cursor={{ fill: '#FFFFFF08' }} content={<WaterTooltip format={(value) => volume(value, locale, language)}/>}/>
+          <ReferenceLine y={statistics.dailyGoal} stroke="#4BA4FF" strokeDasharray="5 6" ifOverflow="extendDomain"/>
+          <Bar dataKey="amount" radius={[7, 7, 2, 2]}>{statistics.data.map((entry) => <Cell key={entry.label} fill={entry.amount > 0 && entry.amount === Math.max(...statistics.data.map((item) => item.amount)) ? 'url(#statsMainBar)' : '#35404D'}/>)}</Bar>
+        </BarChart></ResponsiveContainer>
+      </div>
+    </motion.section>
 
-      <motion.section className="chart-card primary-chart" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="section-row">
-          <div>
-            <div className="chart-period-heading">
-              <p className="eyebrow">{periodLabel}</p>
-              {period === 'month' && <label className="month-picker">
-                <select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))} aria-label={t('month')}>
-                  {monthOptions.map(({ value, label }) => <option value={value} key={value}>{label}</option>)}
-                </select>
-                <ChevronDown size={14} aria-hidden="true" />
-              </label>}
-              {period === 'year' && <label className="year-picker">
-                <select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} aria-label={t('year')}>
-                  {availableYears.map((year) => <option value={year} key={year}>{year}</option>)}
-                </select>
-                <ChevronDown size={14} aria-hidden="true" />
-              </label>}
-            </div>
-            <h2>{formatVolume(average)} <small>{t('average')}</small></h2>
-          </div>
-        </div>
-        <div className="chart-holder bar-holder">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} barSize={period === 'year' ? 12 : 22} margin={{ top: 10, right: 2, bottom: 0, left: -25 }}>
-              <defs>
-                <linearGradient id="barGradient" x1="0" x2="0" y1="0" y2="1">
-                  <stop stopColor="#68BAFF" />
-                  <stop offset="1" stopColor="#2678F6" />
-                </linearGradient>
-              </defs>
-              <CartesianGrid vertical={false} stroke="#FFFFFF0C" />
-              <YAxis domain={[0, axisUpperBound]} ticks={axisTicks} allowDecimals={false} tickFormatter={formatVolume} axisLine={false} tickLine={false} tick={{ fill: '#83878e', fontSize: 11 }} />
-              <XAxis dataKey="label" interval={0} minTickGap={0} padding={{ left: 2, right: 2 }} axisLine={false} tickLine={false} tick={{ fill: '#83878e', fontSize: yearlyTickSize }} />
-              <Tooltip cursor={{ fill: '#FFFFFF08' }} content={<WaterTooltip format={formatVolume} />} />
-              <Bar dataKey="amount" radius={[8, 8, 4, 4]}>
-                {data.map((entry) => <Cell key={entry.label} fill={max > 0 && entry.amount === max ? 'url(#barGradient)' : '#2B3442'} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </motion.section>
+    <section className="stats-v2-metrics" aria-label={language === 'ru' ? 'Показатели' : 'Key metrics'}>
+      <Metric icon={Droplets} label={language === 'ru' ? 'Всего выпито' : 'Total intake'} value={volume(statistics.total, locale, language)} tone="blue"/>
+      <Metric icon={GlassWater} label={language === 'ru' ? 'Дней с целью' : 'Goal days'} value={language === 'ru' ? `${statistics.goalDays} из ${statistics.visibleDays.length}` : `${statistics.goalDays} of ${statistics.visibleDays.length}`} tone="cyan"/>
+      <Metric icon={Flame} label={language === 'ru' ? 'Серия' : 'Streak'} value={streakLabel(streak, language)} tone="orange"/>
+      <Metric icon={Trophy} label={language === 'ru' ? 'Лучший день' : 'Best day'} value={statistics.maxDay ? volume(statistics.maxDay.amount, locale, language) : volume(0, locale, language)} caption={statistics.maxDay?.amount ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(statistics.maxDay.date) : (language === 'ru' ? 'Пока нет записей' : 'No entries yet')} tone="gold"/>
+    </section>
 
-      <section className="metric-grid">
-        {cards.map(({ label, value, icon: Icon, tone }) => (
-          <motion.article className="metric-card" key={label} whileTap={{ scale: 0.98 }}>
-            <span className={`metric-icon ${tone}`}><Icon size={18} /></span>
-            <p>{label}</p>
-            <strong>{value}</strong>
-          </motion.article>
-        ))}
-      </section>
+    <section className="stats-v2-secondary-grid">
+      <article className="stats-v2-small-card distribution-card"><div className="stats-v2-card-title"><span>{language === 'ru' ? 'Распределение' : 'Distribution'}</span><ChevronRight size={16}/></div><div className="distribution-content"><div className="distribution-donut" style={{ background: donutBackground(statistics.distribution.map((item) => item.percent)) }}><i/></div><div className="distribution-legend">{statistics.distribution.map((item, index) => <div key={item.label}><i className={`dot-${index}`}/><span>{item.label}</span><b>{item.percent}%</b></div>)}</div></div></article>
+      <article className="stats-v2-small-card time-card"><div className="stats-v2-card-title"><span>{language === 'ru' ? 'Среднее по времени' : 'Average by time'}</span></div><div className="stats-v2-time-chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={statistics.timePoints} margin={{ top: 8, right: 2, bottom: -4, left: -26 }}><CartesianGrid vertical={false} stroke="#FFFFFF09"/><YAxis width={29} tickFormatter={(value: number) => volume(value, locale, language)} axisLine={false} tickLine={false} tick={{ fill: '#77818b', fontSize: 8 }}/><XAxis dataKey="label" interval={1} axisLine={false} tickLine={false} tick={{ fill: '#7c858e', fontSize: 8 }}/><Tooltip content={<WaterTooltip format={(value) => volume(value, locale, language)}/>}/><Line type="monotone" dataKey="amount" stroke="#55AEFF" strokeWidth={2.4} dot={false} activeDot={{ r: 4, fill: '#0e1012', stroke: '#72baff', strokeWidth: 2 }}/></LineChart></ResponsiveContainer></div></article>
+    </section>
 
-      <section className="chart-card line-card">
-        <div className="section-row">
-          <div>
-            <p className="eyebrow">{trendLabel}</p>
-            <h2>{t('waterBalance')}</h2>
-          </div>
-          <span className="soft-dot" />
-        </div>
-        <div className="chart-holder line-holder">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 8, right: 0, bottom: 0, left: -25 }}>
-              <CartesianGrid vertical={false} stroke="#FFFFFF0A" />
-              <YAxis domain={[0, axisUpperBound]} ticks={axisTicks} allowDecimals={false} tickFormatter={formatVolume} axisLine={false} tickLine={false} tick={{ fill: '#83878e', fontSize: 11 }} />
-              <XAxis dataKey="label" interval={0} minTickGap={0} padding={{ left: 2, right: 2 }} axisLine={false} tickLine={false} tick={{ fill: '#83878e', fontSize: yearlyTickSize }} />
-              <Tooltip content={<WaterTooltip format={formatVolume} />} />
-              <Line type="monotone" dataKey="amount" stroke="#55AEFF" strokeWidth={3} dot={{ fill: '#0F1115', stroke: '#80C8FF', strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} isAnimationActive />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
+    <section className="stats-v2-history-card">
+      <div className="stats-v2-history-header"><span>{historyTitle}</span>{statistics.history.length > 5 && <button type="button" onClick={() => { haptic.tap(); setHistoryExpanded((value) => !value) }}>{historyExpanded ? (language === 'ru' ? 'Свернуть' : 'Collapse') : (language === 'ru' ? 'Подробнее' : 'Details')}</button>}</div>
+      {statistics.history.length ? <div className="stats-v2-history-list">{statistics.history.slice(0, historyExpanded ? undefined : 5).map((day) => <article key={day.key}><time>{new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(day.date)}</time><div><i style={{ width: `${day.ratio}%` }}/></div><strong>{volume(day.amount, locale, language)} <small>/ {volume(day.goal, locale, language)}</small></strong><ChevronRight size={15}/></article>)}</div> : <div className="stats-v2-empty-history">{language === 'ru' ? 'В выбранном периоде ещё нет записей воды.' : 'There are no water entries in this period yet.'}</div>}
+    </section>
 
-      <section className="insight-card">
-        <div>
-          <span>{bestResultLabel}</span>
-          <strong>{formatVolume(max)}</strong>
-          <p>{total ? t('dataUpdates') : t('addFirstRecord')}</p>
-        </div>
-        <div className="mini-heatmap" aria-label={t('heatmap')}>
-          {data.slice(0, 9).map((entry) => <i key={entry.label} style={{ opacity: 0.12 + Math.min(entry.amount / 3700, 0.88) }} />)}
-        </div>
-      </section>
-    </main>
-  )
+    <GoalSheet open={goalSheetOpen} goal={goal} onClose={() => setGoalSheetOpen(false)} onSave={setGoal}/>
+  </main>
+}
+
+function Metric({ icon: Icon, label, value, caption, tone }: { icon: typeof Droplets; label: string; value: string; caption?: string; tone: 'blue' | 'cyan' | 'orange' | 'gold' }) {
+  return <article className="stats-v2-metric"><span className={`stats-v2-metric-icon ${tone}`}><Icon size={18}/></span><p>{label}</p><strong>{value}</strong>{caption && <small>{caption}</small>}</article>
 }
 
 function WaterTooltip({ active, payload, format }: { active?: boolean; payload?: readonly { value?: number | string | readonly (number | string)[] }[]; format: (value: number) => string }) {
-  const rawValue = payload?.[0]?.value
-  const value = typeof rawValue === 'number' ? rawValue : Number(rawValue)
+  const raw = payload?.[0]?.value
+  const value = typeof raw === 'number' ? raw : Number(raw)
   if (!active || !Number.isFinite(value)) return null
   return <div className="chart-tooltip">{format(value)}</div>
 }
