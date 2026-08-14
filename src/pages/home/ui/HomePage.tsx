@@ -181,7 +181,7 @@ export default function HomePage() {
     </motion.section>
 
     <motion.section className="home-v3-progress-card" variants={item}>
-      <div className="home-v3-progress-heading"><h2>{labels.progress}</h2><button type="button" onClick={() => setActiveTab('stats')} aria-label={language === 'en' ? 'Statistics' : 'Статистика'}><Trophy size={19}/></button></div>
+      <div className="home-v3-progress-heading"><h2>{labels.progress}</h2></div>
       <div className="home-v3-progress-content">
         <div className="home-v3-progress-figure">
           <div className="home-v3-scale" aria-hidden="true">{percentageMarks.map((mark) => <span key={mark}><b>{mark}%</b><i/></span>)}</div>
@@ -192,8 +192,9 @@ export default function HomePage() {
           <div className="home-v3-metric"><i><Flame size={17}/></i><dt>{labels.streak}</dt><dd>{streak} {language === 'en' ? (streak === 1 ? 'day' : 'days') : (streak === 1 ? 'день' : streak > 1 && streak < 5 ? 'дня' : 'дней')}</dd><small>{labels.inRow}</small></div>
           <div className="home-v3-metric"><i><Droplets size={17}/></i><dt>{labels.average}</dt><dd>{formatMl(weekAverage, language)} {millilitres}</dd><small>{labels.perDay}</small></div>
           <div className="home-v3-progress-actions">
-            <button type="button" onClick={() => { haptic.tap(); setActiveTab('profile') }}><i><BellRing size={16}/></i><span>{labels.reminders}</span></button>
-            <button type="button" onClick={() => { haptic.tap(); setWardrobeOpen(true) }}><i><HangerIcon/></i><span>{labels.skins}</span></button>
+            <button type="button" onClick={() => { haptic.tap(); setActiveTab('stats') }} aria-label={language === 'en' ? 'Statistics' : 'Статистика'}><i><Trophy size={19}/></i></button>
+            <button type="button" onClick={() => { haptic.tap(); setActiveTab('profile') }} aria-label={labels.reminders}><i><BellRing size={19}/></i></button>
+            <button type="button" onClick={() => { haptic.tap(); setWardrobeOpen(true) }} aria-label={labels.skins}><i><HangerIcon/></i></button>
           </div>
         </div>
       </div>
