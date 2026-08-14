@@ -187,11 +187,15 @@ export default function HomePage() {
           <div className="home-v3-scale" aria-hidden="true">{percentageMarks.map((mark) => <span key={mark}><b>{mark}%</b><i/></span>)}</div>
           <BodyWater percentage={fillPercentage} skin={profile.skin}/>
         </div>
-        <dl className="home-v3-metrics">
-          <div><i><Trophy size={17}/></i><dt>{labels.best}</dt><dd>{formatMl(bestDay.amount, language)} {millilitres}</dd><small>{bestDate}</small></div>
-          <div><i><Flame size={17}/></i><dt>{labels.streak}</dt><dd>{streak} {language === 'en' ? (streak === 1 ? 'day' : 'days') : (streak === 1 ? 'день' : streak > 1 && streak < 5 ? 'дня' : 'дней')}</dd><small>{labels.inRow}</small></div>
-          <div><i><Droplets size={17}/></i><dt>{labels.average}</dt><dd>{formatMl(weekAverage, language)} {millilitres}</dd><small>{labels.perDay}</small></div>
-        </dl>
+        <div className="home-v3-metrics">
+          <div className="home-v3-metric"><i><Trophy size={17}/></i><dt>{labels.best}</dt><dd>{formatMl(bestDay.amount, language)} {millilitres}</dd><small>{bestDate}</small></div>
+          <div className="home-v3-metric"><i><Flame size={17}/></i><dt>{labels.streak}</dt><dd>{streak} {language === 'en' ? (streak === 1 ? 'day' : 'days') : (streak === 1 ? 'день' : streak > 1 && streak < 5 ? 'дня' : 'дней')}</dd><small>{labels.inRow}</small></div>
+          <div className="home-v3-metric"><i><Droplets size={17}/></i><dt>{labels.average}</dt><dd>{formatMl(weekAverage, language)} {millilitres}</dd><small>{labels.perDay}</small></div>
+          <div className="home-v3-progress-actions">
+            <button type="button" onClick={() => { haptic.tap(); setActiveTab('profile') }}><i><BellRing size={16}/></i><span>{labels.reminders}</span></button>
+            <button type="button" onClick={() => { haptic.tap(); setWardrobeOpen(true) }}><i><HangerIcon/></i><span>{labels.skins}</span></button>
+          </div>
+        </div>
       </div>
     </motion.section>
 
@@ -211,13 +215,6 @@ export default function HomePage() {
         <motion.button type="submit" className="home-v3-custom-submit" whileTap={{ scale: .96 }} disabled={!customAmount || Number(customAmount) > 5000}>{t('addWater')}</motion.button>
       </div>
     </motion.form>
-
-    <motion.section className="home-v3-shortcuts" variants={item}>
-      <button type="button" onClick={() => { haptic.tap(); setActiveTab('stats') }}><i><Trophy size={20}/></i><strong>{language === 'en' ? 'Statistics' : 'Статистика'}</strong><small>{language === 'en' ? 'Analytics' : 'Аналитика'}</small></button>
-      <button type="button" onClick={() => { haptic.tap(); setGoalOpen(true) }}><i><PencilLine size={20}/></i><strong>{language === 'en' ? 'Goal' : 'Цели'}</strong><small>{language === 'en' ? 'Set target' : 'Поставить цель'}</small></button>
-      <button type="button" onClick={() => { haptic.tap(); setActiveTab('profile') }}><i><BellRing size={20}/></i><strong>{labels.reminders}</strong><small>{language === 'en' ? 'Set up' : 'Настроить'}</small></button>
-      <button type="button" onClick={() => { haptic.tap(); setWardrobeOpen(true) }}><i><HangerIcon/></i><strong>{labels.skins}</strong><small>{language === 'en' ? 'Choose look' : 'Выбрать образ'}</small></button>
-    </motion.section>
 
     <AddWaterSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onAdd={add}/>
     <GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/>
