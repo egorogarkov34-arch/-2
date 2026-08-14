@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
-import { BellRing, Droplets, Flame, History, Minus, PencilLine, Plus, Trophy } from 'lucide-react'
+import { BellOff, BellRing, Droplets, Flame, History, Minus, PencilLine, Plus, Trophy } from 'lucide-react'
 import { useHydrationStore, selectTodayAmount } from '@/entities/hydration/model/store'
 import { BodyWater } from '@/entities/hydration/ui/BodyWater'
 import { ProgressRing } from '@/entities/hydration/ui/ProgressRing'
@@ -8,6 +8,7 @@ import { AddWaterSheet } from '@/features/log-water/ui/AddWaterSheet'
 import { GoalSheet } from '@/features/goal/ui/GoalSheet'
 import { HistorySheet } from '@/features/history/ui/HistorySheet'
 import { WardrobeSheet } from '@/features/skins/ui/WardrobeSheet'
+import { QuickRemindersSheet } from '@/features/reminders/ui/QuickRemindersSheet'
 import { clamp, formatMl, todayKey } from '@/shared/lib/format'
 import { haptic } from '@/shared/lib/telegram'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
@@ -49,6 +50,7 @@ export default function HomePage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [goalOpen, setGoalOpen] = useState(false)
   const [wardrobeOpen, setWardrobeOpen] = useState(false)
+  const [remindersOpen, setRemindersOpen] = useState(false)
   const [toast, setToast] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('250')
   const [isEditingCustomAmount, setIsEditingCustomAmount] = useState(false)
@@ -193,7 +195,7 @@ export default function HomePage() {
           <div className="home-v3-metric"><i><Droplets size={17}/></i><dt>{labels.average}</dt><dd>{formatMl(weekAverage, language)} {millilitres}</dd><small>{labels.perDay}</small></div>
           <div className="home-v3-progress-actions">
             <button type="button" onClick={() => { haptic.tap(); setActiveTab('stats') }} aria-label={language === 'en' ? 'Statistics' : 'Статистика'}><i><Trophy size={19}/></i></button>
-            <button type="button" onClick={() => { haptic.tap(); setActiveTab('profile') }} aria-label={labels.reminders}><i><BellRing size={19}/></i></button>
+            <button type="button" className={profile.reminders.enabled ? '' : 'is-reminders-off'} onClick={() => { haptic.tap(); setRemindersOpen(true) }} aria-label={labels.reminders}><i>{profile.reminders.enabled ? <BellRing size={19}/> : <BellOff size={19}/>}</i></button>
             <button type="button" onClick={() => { haptic.tap(); setWardrobeOpen(true) }} aria-label={labels.skins}><i><HangerIcon/></i></button>
           </div>
         </div>
@@ -221,6 +223,7 @@ export default function HomePage() {
     <GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/>
     <HistorySheet open={historyOpen} entries={intake} onClose={() => setHistoryOpen(false)} onDelete={remove} onClearAll={clearTodayWater}/>
     <WardrobeSheet open={wardrobeOpen} skin={profile.skin} onClose={() => setWardrobeOpen(false)} onSelect={(skin) => { updateProfile({ skin }); setWardrobeOpen(false) }}/>
+    <QuickRemindersSheet open={remindersOpen} enabled={profile.reminders.enabled} interval={profile.reminders.intervalMinutes} language={language} onClose={() => setRemindersOpen(false)} onToggle={(enabled) => updateProfile({ reminders: { ...profile.reminders, enabled } })} onSelectInterval={(intervalMinutes) => updateProfile({ reminders: { ...profile.reminders, intervalMinutes } })}/>
     {toast !== null && <motion.div className="success-toast" initial={{ opacity: 0, y: 16, scale: .95 }} animate={{ opacity: 1, y: 0, scale: 1 }}><span><Droplets size={17}/></span> +{toast} {millilitres} {t('added')}</motion.div>}
   </motion.main>
 }
