@@ -170,7 +170,7 @@ export default function HomePage() {
     </motion.section>
 
     <motion.section className="home-v3-summary-grid" variants={item}>
-      <div className="home-v3-summary-card">
+      <div className="home-v3-summary-card home-v3-summary-card--remaining">
         <div><span>{labels.remaining}</span><strong>{remaining ? `${formatMl(remaining, language)} ${millilitres}` : t('goalReached')}</strong><small>{remaining ? labels.untilGoal : ''}</small></div>
         <i><Droplets size={21}/></i>
       </div>
