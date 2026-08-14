@@ -33,7 +33,7 @@ h2 { font-size: 17px; letter-spacing: -.025em; margin: 0; }
 .progress-ring svg { overflow: visible; }
 .ring-track { fill: none; stroke: #272c32; }
 .ring-value { fill: none; stroke: url(#ringGradient); stroke: #53aaff; filter: drop-shadow(0 0 5px #2e90ff77); }
-.ring-label { position: absolute; color: #eaf5ff; font-size: 16px; font-weight: 700; letter-spacing: -.04em; }
+.ring-label { position: absolute; inset: 0; display: grid; place-items: center; color: #eaf5ff; font-size: 16px; font-weight: 700; letter-spacing: -.04em; line-height: 1; pointer-events: none; }
 .body-section { height: 402px; position: relative; display: grid; align-items: center; justify-items: center; margin: 4px 0 6px; }
 .body-metrics { position: absolute; top: 22px; left: 6px; z-index: 2; display: grid; gap: 3px; }
 .body-metrics span { font-size: 11px; color: #77808a; text-transform: uppercase; letter-spacing: .06em; }
