@@ -55,14 +55,32 @@ interface ReminderSyncState {
   intake: IntakeEntry[]
 }
 
-const reminderApiUrl = () => {
+const botApiUrl = () => {
   const configuredUrl = import.meta.env.VITE_AQUORA_BOT_URL as string | undefined
-  return configuredUrl?.replace(/\/+$/, '')
+  return (configuredUrl || 'https://aquora-water-bot.egorogarkov34.workers.dev').replace(/\/+$/, '')
+}
+
+export type AppAccessState = 'allowed' | 'closed' | 'unavailable'
+
+/** The Worker verifies the Telegram signature before returning access status. */
+export const checkAppAccess = async (): Promise<AppAccessState> => {
+  const initData = getTelegramInitData()
+  if (!initData) return 'allowed'
+  try {
+    const response = await fetch(`${botApiUrl()}/api/access`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ initData }),
+    })
+    const payload: unknown = await response.json().catch(() => null)
+    if (!response.ok || !payload || typeof payload !== 'object' || !('allowed' in payload) || typeof payload.allowed !== 'boolean') return 'unavailable'
+    return payload.allowed ? 'allowed' : 'closed'
+  } catch { return 'unavailable' }
 }
 
 /** Mirrors only the data required for a bot reminder. The Worker validates initData before accepting it. */
 export const syncReminderState = ({ profile, goal, intake }: ReminderSyncState) => {
-  const apiUrl = reminderApiUrl()
+  const apiUrl = botApiUrl()
   const initData = getTelegramInitData()
   if (!apiUrl || !initData) return
 

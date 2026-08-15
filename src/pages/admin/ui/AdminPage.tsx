@@ -20,6 +20,7 @@ interface DashboardUser {
 }
 
 interface DashboardAdmin { id: number; role: AdminRole; name: string }
+interface AllowedUser { id: number; name: string; addedAt: number }
 interface BroadcastResult { ok: true; sent: number; failed: number; recipients: number }
 type BroadcastMediaKind = 'photo' | 'animation' | 'sticker'
 interface BroadcastMedia { kind: BroadcastMediaKind; dataUrl: string; name: string }
@@ -41,6 +42,10 @@ interface DashboardData {
   users: DashboardUser[]
   admins: DashboardAdmin[]
   premiumEmojis: PremiumEmoji[]
+  access: {
+    mode: 'open' | 'private'
+    allowedUsers: AllowedUser[]
+  }
 }
 
 class ApiError extends Error {
@@ -88,6 +93,9 @@ export default function AdminPage() {
   const [adminId, setAdminId] = useState('')
   const [updatingRole, setUpdatingRole] = useState<number | null>(null)
   const [updatingAccess, setUpdatingAccess] = useState<number | null>(null)
+  const [accessUserId, setAccessUserId] = useState('')
+  const [updatingAccessMode, setUpdatingAccessMode] = useState(false)
+  const [updatingAllowedUser, setUpdatingAllowedUser] = useState<number | null>(null)
   const [broadcastText, setBroadcastText] = useState('')
   const [broadcastResult, setBroadcastResult] = useState<string | null>(null)
   const [sendingBroadcast, setSendingBroadcast] = useState(false)
@@ -136,6 +144,37 @@ export default function AdminPage() {
       setError(caught instanceof Error ? caught.message : 'request_failed')
       haptic.error()
     } finally { setUpdatingAccess(null) }
+  }
+
+  const updateAccessMode = async (mode: DashboardData['access']['mode']) => {
+    if (mode === data?.access.mode) return
+    const confirmation = mode === 'private'
+      ? 'Закрыть бота для всех, кроме владельца, администраторов и разрешённых пользователей?'
+      : 'Открыть бота для всех пользователей?'
+    if (!window.confirm(confirmation)) return
+    setUpdatingAccessMode(true)
+    try {
+      const next = await requestAdmin<DashboardData>('/api/admin/access/mode', { mode })
+      setData(next)
+      haptic.success()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'request_failed')
+      haptic.error()
+    } finally { setUpdatingAccessMode(false) }
+  }
+
+  const updateAllowedUser = async (action: 'grant' | 'revoke', id: number) => {
+    if (!Number.isSafeInteger(id) || id <= 0) { haptic.error(); return }
+    setUpdatingAllowedUser(id)
+    try {
+      const next = await requestAdmin<DashboardData>('/api/admin/access/users', { action, userId: id })
+      setData(next)
+      setAccessUserId('')
+      haptic.success()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'request_failed')
+      haptic.error()
+    } finally { setUpdatingAllowedUser(null) }
   }
 
   const selectBroadcastMedia = (file: File | null) => {
@@ -190,6 +229,29 @@ export default function AdminPage() {
       <article className="admin-metric-card"><span className="admin-metric-icon"><Activity size={17}/></span><small>Выпито сегодня</small><strong>{formatMl(metrics.totalTodayAmount)}</strong><p>в среднем {formatMl(metrics.averageTodayAmount)}</p></article>
       <article className="admin-metric-card"><span className="admin-metric-icon"><BellRing size={17}/></span><small>Напоминания</small><strong>{number.format(metrics.remindersEnabled)}</strong><p>{number.format(metrics.goalsReachedToday)} целей выполнено</p></article>
     </section>
+
+    {isOwner && <section className="admin-section">
+      <div className="admin-section-heading"><div><p className="eyebrow">Access control</p><h2>Режим доступа</h2></div><span>{data.access.mode === 'private' ? 'Приватный' : 'Открытый'}</span></div>
+      <div className="admin-access-card">
+        <div className="admin-access-mode">
+          <div><strong>{data.access.mode === 'private' ? 'Бот закрыт для новых пользователей' : 'Бот доступен всем'}</strong><p>{data.access.mode === 'private' ? 'Доступ сохраняется у владельца, администраторов и пользователей из списка ниже.' : 'Любой пользователь может запустить бота и открыть трекер.'}</p></div>
+          <button type="button" className={`admin-access-toggle ${data.access.mode === 'private' ? 'is-private' : ''}`} aria-pressed={data.access.mode === 'private'} onClick={() => void updateAccessMode(data.access.mode === 'private' ? 'open' : 'private')} disabled={updatingAccessMode}>
+            {data.access.mode === 'private' ? <LockKeyhole size={16}/> : <Unlock size={16}/>}<span>{data.access.mode === 'private' ? 'Открыть' : 'Закрыть'}</span>
+          </button>
+        </div>
+        <div className="admin-access-divider"/>
+        <div className="admin-access-list-heading"><div><strong>Разрешённые пользователи</strong><small>Укажите Telegram ID — пользователь сможет пользоваться ботом, когда он закрыт.</small></div><span>{data.access.allowedUsers.length}</span></div>
+        <form className="admin-add-form admin-access-form" onSubmit={(event) => { event.preventDefault(); void updateAllowedUser('grant', Number(accessUserId)) }}>
+          <input inputMode="numeric" value={accessUserId} onChange={(event) => setAccessUserId(event.target.value.replace(/\D/g, ''))} placeholder="Telegram ID пользователя" aria-label="Telegram ID разрешённого пользователя"/>
+          <button type="submit" disabled={!accessUserId || updatingAllowedUser !== null}><UserPlus size={16}/> Разрешить</button>
+        </form>
+        <div className="admin-allowed-users">
+          {data.access.allowedUsers.length === 0 ? <p>Список пока пуст. В приватном режиме доступ есть только у владельца и администраторов.</p> : data.access.allowedUsers.map((user) => <div className="admin-role-row" key={user.id}>
+            <span className="admin-role-icon"><UsersRound size={16}/></span><div><strong>{user.name}</strong><small>ID: {user.id} · добавлен {updatedAt(user.addedAt)}</small></div><button type="button" className="admin-remove-button" aria-label={`Убрать доступ у ${user.name}`} onClick={() => void updateAllowedUser('revoke', user.id)} disabled={updatingAllowedUser === user.id}><Trash2 size={16}/></button>
+          </div>)}
+        </div>
+      </div>
+    </section>}
 
     {isOwner && <section className="admin-section">
       <div className="admin-section-heading"><div><p className="eyebrow">Owner tools</p><h2>Рассылка</h2></div><Megaphone size={18}/></div>

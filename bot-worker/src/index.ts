@@ -15,6 +15,7 @@ interface RequestBucket { startedAt: number; count: number }
 type Language = 'ru' | 'en'
 type ReminderInterval = 30 | 60 | 120 | 180
 type AdminRole = 'owner' | 'admin'
+type AccessMode = 'open' | 'private'
 
 interface ProfileSnapshot {
   name: string
@@ -73,6 +74,18 @@ interface AdminSession {
   expiresAt: number
 }
 
+interface AccessSettings {
+  mode: AccessMode
+  updatedAt: number
+  updatedBy: number
+}
+
+interface AccessGrant {
+  userId: number
+  addedAt: number
+  addedBy: number
+}
+
 interface AdminRequestPayload {
   initData: string
   session?: string
@@ -83,6 +96,13 @@ interface AdminRoleRequestPayload extends AdminRequestPayload {
 }
 interface AdminUserAccessRequestPayload extends AdminRequestPayload {
   action: 'block' | 'unblock'
+  userId: number
+}
+interface AdminAccessModeRequestPayload extends AdminRequestPayload {
+  mode: AccessMode
+}
+interface AdminAccessGrantRequestPayload extends AdminRequestPayload {
+  action: 'grant' | 'revoke'
   userId: number
 }
 interface AdminBroadcastRequestPayload extends AdminRequestPayload {
@@ -99,6 +119,7 @@ interface BroadcastMediaPayload {
 interface PremiumEmojiRecord { id: string; addedAt: number }
 
 const DEFAULT_AQUA_APP_URL = 'https://aquora-water.onrender.com'
+const ACCESS_SETTINGS_KEY = 'access:settings'
 const MAX_WEBHOOK_BODY_BYTES = 64 * 1024
 const MAX_STATE_BODY_BYTES = 16 * 1024
 const INVALID_REQUEST_WINDOW_MS = 60_000
@@ -121,6 +142,7 @@ const waterEmoji = String.fromCodePoint(0x1F4A7)
 const welcomeText = decodeUtf8('8J+SpyA8Yj7QlNC+0LHRgNC+INC/0L7QttCw0LvQvtCy0LDRgtGMINCyIEFxdW9yYSBXYXRlciE8L2I+CgrQodC70LXQtNC40YLRjCDQt9CwINCy0L7QtNC90YvQvCDQsdCw0LvQsNC90YHQvtC8INGB0YLQsNC70L4g0L/RgNC+0YnQtSDQuCDQv9GA0LjRj9GC0L3QtdC1LgrQntGC0LzQtdGH0LDQuSDQutCw0LbQtNGL0Lkg0YHRgtCw0LrQsNC9INCy0L7QtNGLLCDQvdCw0LHQu9GO0LTQsNC5LCDQutCw0Log0YHQuNC70YPRjdGCINC/0L7RgdGC0LXQv9C10L3QvdC+INC30LDQv9C+0LvQvdGP0LXRgtGB0Y8sINC+0YLRgdC70LXQttC40LLQsNC5INC/0YDQvtCz0YDQtdGB0YEg0Lgg0YTQvtGA0LzQuNGA0YPQuSDQv9C+0LvQtdC30L3Rg9GOINC/0YDQuNCy0YvRh9C60YMg0LrQsNC20LTRi9C5INC00LXQvdGMLgo8Yj7QndCw0YfQvdC4INC/0YDRj9C80L4g0YHQtdC50YfQsNGBIOKAlCDRgdC00LXQu9Cw0Lkg0L/QtdGA0LLRi9C5INCz0LvQvtGC0L7QuiDQvdCwINC/0YPRgtC4INC6INC70YPRh9GI0LXQvNGDINGB0LDQvNC+0YfRg9Cy0YHRgtCy0LjRji48L2I+Cgrwn5KnIDxiPldlbGNvbWUgdG8gQXF1b3JhIFdhdGVyITwvYj4KClN0YXlpbmcgaHlkcmF0ZWQgaGFzIG5ldmVyIGJlZW4gdGhpcyBzaW1wbGUuClRyYWNrIGV2ZXJ5IGdsYXNzIG9mIHdhdGVyLCB3YXRjaCB5b3VyIGJvZHkgZmlsbCB1cCBhcyB5b3UgcmVhY2ggeW91ciBnb2FsLCBtb25pdG9yIHlvdXIgcHJvZ3Jlc3MsIGFuZCBidWlsZCBhIGhlYWx0aHkgaGFiaXQgZXZlcnkgZGF5Lgo8Yj5TdGFydCBub3cgYW5kIHRha2UgeW91ciBmaXJzdCBzdGVwIHRvd2FyZCBiZXR0ZXIgaHlkcmF0aW9uLjwvYj4=')
 const openText = decodeUtf8('8J+SpyA8Yj5BcXVvcmEgV2F0ZXI8L2I+CgrQndCw0LbQvNC40YLQtSDQutC90L7Qv9C60YMg0L3QuNC20LUsINGH0YLQvtCx0Ysg0L7RgtC60YDRi9GC0Ywg0YLRgNC10LrQtdGALgoKVGFwIHRoZSBidXR0b24gYmVsb3cgdG8gb3BlbiB0aGUgdHJhY2tlci4=')
 const helpText = decodeUtf8('8J+SpyA8Yj7QmtC+0LzQsNC90LTRiyBBcXVvcmEgV2F0ZXI8L2I+Cgovc3RhcnQg4oCUINC/0YDQuNCy0LXRgtGB0YLQstC40LUg0LggTWluaSBBcHAKL29wZW4g4oCUINC+0YLQutGA0YvRgtGMINGC0YDQtdC60LXRgAovaGVscCDigJQg0YHQv9C40YHQvtC6INC60L7QvNCw0L3QtA==')
+const accessClosedText = '\u{1F4A7} <b>Aquora скоро откроется</b>\n\nСейчас мы готовим трекер к запуску и завершаем последние улучшения.\n\nСовсем скоро вы сможете отслеживать водный баланс, ставить цели и видеть свой прогресс. Спасибо, что ждёте нас.'
 
 const reminderCopies: Record<Language, Array<{ title: string; body: string; today: string; remaining: string; open: string }>> = {
   ru: [
@@ -145,6 +167,7 @@ function appUrl(env: Env) { return env.AQUA_APP_URL || DEFAULT_AQUA_APP_URL }
 function userKey(userId: number) { return `user:${userId}` }
 function adminKey(userId: number) { return `admin:${userId}` }
 function adminSessionKey(token: string) { return `admin-session:${token}` }
+function accessGrantKey(userId: number) { return `access:user:${userId}` }
 function premiumEmojiKey(id: string) { return `premium-emoji:${id}` }
 function configuredOwnerId(env: Env) {
   const value = Number(env.OWNER_TELEGRAM_ID)
@@ -171,6 +194,7 @@ async function telegramFormRequest(env: Env, method: string, payload: FormData) 
   try { const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', body: payload }); if (!response.ok) console.error(`Telegram ${method} failed: ${response.status}`); return { ok: response.ok, status: response.status } } catch (error) { console.error(`Telegram ${method} failed`, error); return { ok: false, status: 0 } }
 }
 async function sendMessage(env: Env, chatId: number, text: string) { return telegramRequest(env, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: miniAppKeyboard(appUrl(env)) }) }
+async function sendAccessClosedMessage(env: Env, chatId: number) { return telegramRequest(env, 'sendMessage', { chat_id: chatId, text: accessClosedText, parse_mode: 'HTML', disable_web_page_preview: true }) }
 function isPremiumEmojiId(value: unknown): value is string { return typeof value === 'string' && /^\d{5,30}$/.test(value) }
 function parseMediaDataUrl(value: string) {
   const match = /^data:([a-zA-Z0-9.+/-]+);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
@@ -290,6 +314,37 @@ async function adminRole(env: Env, userId: number): Promise<AdminRole | null> {
   return (await readAdminGrant(env, userId))?.role ?? null
 }
 
+async function readAccessSettings(env: Env): Promise<AccessSettings> {
+  if (!env.AQUORA_USERS) return { mode: 'open', updatedAt: 0, updatedBy: 0 }
+  try {
+    const value = await env.AQUORA_USERS.get<AccessSettings>(ACCESS_SETTINGS_KEY, 'json')
+    return value?.mode === 'private' || value?.mode === 'open'
+      ? { mode: value.mode, updatedAt: Number.isFinite(value.updatedAt) ? value.updatedAt : 0, updatedBy: Number.isSafeInteger(value.updatedBy) ? value.updatedBy : 0 }
+      : { mode: 'open', updatedAt: 0, updatedBy: 0 }
+  } catch (error) {
+    console.error('Access settings read failed', error)
+    return { mode: 'open', updatedAt: 0, updatedBy: 0 }
+  }
+}
+
+async function readAccessGrant(env: Env, userId: number) {
+  if (!env.AQUORA_USERS) return null
+  try {
+    const value = await env.AQUORA_USERS.get<AccessGrant>(accessGrantKey(userId), 'json')
+    return value && value.userId === userId && Number.isSafeInteger(value.userId) ? value : null
+  } catch (error) {
+    console.error('Access grant read failed', error)
+    return null
+  }
+}
+
+async function hasBotAccess(env: Env, userId: number) {
+  const settings = await readAccessSettings(env)
+  if (settings.mode === 'open') return true
+  if (await adminRole(env, userId)) return true
+  return Boolean(await readAccessGrant(env, userId))
+}
+
 async function createAdminSession(env: Env, userId: number) {
   if (!env.AQUORA_USERS || !await adminRole(env, userId)) return null
   const token = crypto.randomUUID().replace(/-/g, '')
@@ -328,6 +383,16 @@ function isAdminUserAccessRequest(value: unknown): value is AdminUserAccessReque
   if (!isAdminRequest(value)) return false
   const request = value as Partial<AdminUserAccessRequestPayload>
   return (request.action === 'block' || request.action === 'unblock') && Number.isSafeInteger(request.userId) && Number(request.userId) > 0
+}
+
+function isAdminAccessModeRequest(value: unknown): value is AdminAccessModeRequestPayload {
+  return isAdminRequest(value) && ((value as Partial<AdminAccessModeRequestPayload>).mode === 'open' || (value as Partial<AdminAccessModeRequestPayload>).mode === 'private')
+}
+
+function isAdminAccessGrantRequest(value: unknown): value is AdminAccessGrantRequestPayload {
+  if (!isAdminRequest(value)) return false
+  const request = value as Partial<AdminAccessGrantRequestPayload>
+  return (request.action === 'grant' || request.action === 'revoke') && Number.isSafeInteger(request.userId) && Number(request.userId) > 0
 }
 
 function isAdminBroadcastRequest(value: unknown): value is AdminBroadcastRequestPayload {
@@ -426,8 +491,27 @@ async function readAdminGrants(env: Env) {
   return grants
 }
 
+async function readAccessGrants(env: Env) {
+  if (!env.AQUORA_USERS) return [] as AccessGrant[]
+  const grants: AccessGrant[] = []
+  let cursor: string | undefined
+  do {
+    const page = await env.AQUORA_USERS.list({ prefix: 'access:user:', cursor, limit: 1_000 })
+    const batch = await Promise.all(page.keys.map((key) => env.AQUORA_USERS?.get<AccessGrant>(key.name, 'json')))
+    for (const grant of batch) if (grant && Number.isSafeInteger(grant.userId) && grant.userId > 0) grants.push(grant)
+    cursor = page.list_complete ? undefined : page.cursor
+  } while (cursor)
+  return grants.sort((left, right) => right.addedAt - left.addedAt)
+}
+
 async function dashboardPayload(env: Env, role: AdminRole) {
-  const [records, grants, premiumEmojis] = await Promise.all([readAllUserRecords(env), readAdminGrants(env), role === 'owner' ? readPremiumEmojis(env) : Promise.resolve([] as PremiumEmojiRecord[])])
+  const [records, grants, premiumEmojis, accessSettings, accessGrants] = await Promise.all([
+    readAllUserRecords(env),
+    readAdminGrants(env),
+    role === 'owner' ? readPremiumEmojis(env) : Promise.resolve([] as PremiumEmojiRecord[]),
+    readAccessSettings(env),
+    role === 'owner' ? readAccessGrants(env) : Promise.resolve([] as AccessGrant[]),
+  ])
   const users = records.map(userDashboardItem).sort((left, right) => right.updatedAt - left.updatedAt).slice(0, 100)
   const activeToday = records.filter((record) => visibleAmount(record) > 0)
   const totalTodayAmount = activeToday.reduce((sum, record) => sum + visibleAmount(record), 0)
@@ -453,6 +537,14 @@ async function dashboardPayload(env: Env, role: AdminRole) {
     users,
     admins,
     premiumEmojis,
+    access: {
+      mode: accessSettings.mode,
+      allowedUsers: accessGrants.map((grant) => ({
+        id: grant.userId,
+        name: recordsById.get(grant.userId)?.profile?.name || `User #${grant.userId}`,
+        addedAt: grant.addedAt,
+      })),
+    },
   }
 }
 
@@ -509,6 +601,46 @@ async function handleAdminUserAccess(request: Request, env: Env) {
   return jsonResponse(await dashboardPayload(env, auth.role), 200, cors)
 }
 
+async function handleAdminAccessMode(request: Request, env: Env) {
+  const cors = corsHeaders(request, env)
+  if (request.method === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : textResponse('Forbidden', 403)
+  if (!cors || request.method !== 'POST') return textResponse('Forbidden', 403)
+  const auth = await authenticatedAdmin(request, env, cors)
+  if ('response' in auth) return auth.response
+  if (auth.role !== 'owner') return jsonResponse({ ok: false, error: 'owner_required' }, 403, cors)
+  if (!isAdminAccessModeRequest(auth.body)) return jsonResponse({ ok: false, error: 'invalid_request' }, 400, cors)
+  if (!env.AQUORA_USERS) return jsonResponse({ ok: false, error: 'storage_not_configured' }, 503, cors)
+  try {
+    await env.AQUORA_USERS.put(ACCESS_SETTINGS_KEY, JSON.stringify({ mode: auth.body.mode, updatedAt: Date.now(), updatedBy: auth.user.id } satisfies AccessSettings))
+  } catch (error) {
+    console.error('Access mode write failed', error)
+    return jsonResponse({ ok: false, error: 'storage_unavailable' }, 503, cors)
+  }
+  return jsonResponse(await dashboardPayload(env, auth.role), 200, cors)
+}
+
+async function handleAdminAccessGrants(request: Request, env: Env) {
+  const cors = corsHeaders(request, env)
+  if (request.method === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : textResponse('Forbidden', 403)
+  if (!cors || request.method !== 'POST') return textResponse('Forbidden', 403)
+  const auth = await authenticatedAdmin(request, env, cors)
+  if ('response' in auth) return auth.response
+  if (auth.role !== 'owner') return jsonResponse({ ok: false, error: 'owner_required' }, 403, cors)
+  if (!isAdminAccessGrantRequest(auth.body)) return jsonResponse({ ok: false, error: 'invalid_request' }, 400, cors)
+  if (!env.AQUORA_USERS) return jsonResponse({ ok: false, error: 'storage_not_configured' }, 503, cors)
+  try {
+    if (auth.body.action === 'grant') {
+      await env.AQUORA_USERS.put(accessGrantKey(auth.body.userId), JSON.stringify({ userId: auth.body.userId, addedAt: Date.now(), addedBy: auth.user.id } satisfies AccessGrant))
+    } else {
+      await env.AQUORA_USERS.delete(accessGrantKey(auth.body.userId))
+    }
+  } catch (error) {
+    console.error('Access grant write failed', error)
+    return jsonResponse({ ok: false, error: 'storage_unavailable' }, 503, cors)
+  }
+  return jsonResponse(await dashboardPayload(env, auth.role), 200, cors)
+}
+
 async function handleAdminBroadcast(request: Request, env: Env) {
   const cors = corsHeaders(request, env)
   if (request.method === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : textResponse('Forbidden', 403)
@@ -547,6 +679,20 @@ async function rememberChat(env: Env, message: TelegramMessage) {
   await writeRecord(env, { ...record, chatId: message.chat.id, deliveryBlocked: false, updatedAt: Date.now() })
 }
 
+async function handleMiniAppAccess(request: Request, env: Env) {
+  const cors = corsHeaders(request, env)
+  if (request.method === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : textResponse('Forbidden', 403)
+  if (!cors || request.method !== 'POST') return textResponse('Forbidden', 403)
+  let body: unknown
+  try { body = await request.json() } catch { return jsonResponse({ ok: false, error: 'invalid_request' }, 400, cors) }
+  const initData = body && typeof body === 'object' && typeof (body as { initData?: unknown }).initData === 'string' ? (body as { initData: string }).initData : ''
+  const user = await validateInitData(initData, env)
+  if (!user) return jsonResponse({ ok: false, error: 'unauthorized' }, 401, cors)
+  const record = await readRecord(env, user.id)
+  const allowed = !record?.blocked && await hasBotAccess(env, user.id)
+  return jsonResponse({ ok: true, allowed }, 200, cors)
+}
+
 async function handleReminderState(request: Request, env: Env) {
   const cors = corsHeaders(request, env)
   if (request.method === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : textResponse('Forbidden', 403)
@@ -560,6 +706,7 @@ async function handleReminderState(request: Request, env: Env) {
   if (!env.AQUORA_USERS) return jsonResponse({ ok: false, error: 'storage_not_configured' }, 503, cors)
   const existing = await readRecord(env, user.id)
   if (existing?.blocked) return jsonResponse({ ok: false, error: 'user_blocked' }, 403, cors)
+  if (!await hasBotAccess(env, user.id)) return jsonResponse({ ok: false, error: 'access_closed' }, 403, cors)
   const record: ReminderRecord = { userId: user.id, chatId: existing?.chatId ?? user.id, goal: payload.goal, todayAmount: payload.todayAmount, dateKey: payload.dateKey, language: payload.language, reminders: payload.reminders, profile: payload.profile ?? existing?.profile, reminderIndex: existing?.reminderIndex ?? 0, lastReminderAt: existing?.lastReminderAt, lastReminderDateKey: existing?.lastReminderDateKey, completedDateKey: existing?.completedDateKey, deliveryBlocked: false, blocked: false, updatedAt: Date.now() }
   if (!await writeRecord(env, record)) return jsonResponse({ ok: false, error: 'storage_unavailable' }, 503, cors)
   return jsonResponse({ ok: true }, 200, cors)
@@ -604,10 +751,13 @@ async function runReminders(env: Env) { if (!env.AQUORA_USERS || !env.TELEGRAM_B
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
+    if (url.pathname === '/api/access') return handleMiniAppAccess(request, env)
     if (url.pathname === '/api/reminder-state') return handleReminderState(request, env)
     if (url.pathname === '/api/admin/dashboard') return handleAdminDashboard(request, env)
     if (url.pathname === '/api/admin/roles') return handleAdminRoles(request, env)
     if (url.pathname === '/api/admin/users/access') return handleAdminUserAccess(request, env)
+    if (url.pathname === '/api/admin/access/mode') return handleAdminAccessMode(request, env)
+    if (url.pathname === '/api/admin/access/users') return handleAdminAccessGrants(request, env)
     if (url.pathname === '/api/admin/broadcast') return handleAdminBroadcast(request, env)
     if (request.method === 'GET' && url.pathname === '/') return textResponse('Aquora Telegram bot is online.')
     if (request.method !== 'POST') return textResponse('Not found', 404)
@@ -620,13 +770,17 @@ export default {
     const message = update.message
     if (!message?.text && !message?.entities?.length) return textResponse('ok')
     if (message.from && (await readRecord(env, message.from.id))?.blocked) return textResponse('ok')
+    const command = commandFrom(message)
+    if (message.from && !await hasBotAccess(env, message.from.id)) {
+      if (command) await sendAccessClosedMessage(env, message.chat.id)
+      return textResponse('ok')
+    }
     await rememberChat(env, message)
     if (message.from?.id === configuredOwnerId(env)) await setOwnerCommandMenu(env)
     if (await savePremiumEmojis(env, message)) {
       await sendMessage(env, message.chat.id, '✨ <b>Premium-эмодзи добавлен в библиотеку рассылок.</b>\n\nОткройте /admin и выберите его в блоке «Рассылка».')
       return textResponse('ok')
     }
-    const command = commandFrom(message)
     if (command === '/start') await sendMessage(env, message.chat.id, welcomeText)
     else if (command === '/open') await sendMessage(env, message.chat.id, openText)
     else if (command === '/help') await sendMessage(env, message.chat.id, helpText)
