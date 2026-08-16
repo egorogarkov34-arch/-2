@@ -6,7 +6,7 @@ interface Env {
   AQUORA_USERS?: KVNamespace
 }
 
-interface TelegramUser { id: number; language_code?: string }
+interface TelegramUser { id: number; language_code?: string; username?: string; first_name?: string; last_name?: string }
 interface TelegramEntity { type: string; custom_emoji_id?: string }
 interface TelegramMessage { chat: { id: number }; from?: TelegramUser; text?: string; entities?: TelegramEntity[] }
 interface TelegramUpdate { message?: TelegramMessage }
@@ -49,6 +49,7 @@ interface ReminderRecord {
   blockedAt?: number
   blockedBy?: number
   profile?: ProfileSnapshot
+  telegramName?: string
   updatedAt: number
 }
 
@@ -262,6 +263,12 @@ function isReminderInterval(value: unknown): value is ReminderInterval { return 
 function isDateKey(value: unknown): value is string { return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) }
 function isFiniteNumber(value: unknown, min: number, max: number) { return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max }
 function cleanName(value: unknown) { return typeof value === 'string' ? value.trim().replace(/[<>]/g, '').slice(0, 64) : '' }
+function telegramDisplayName(user: TelegramUser) {
+  const fullName = cleanName([user.first_name, user.last_name].filter((value): value is string => typeof value === 'string').join(' '))
+  if (fullName) return fullName
+  const username = cleanName(user.username)
+  return username ? `@${username}` : ''
+}
 function parseProfileSnapshot(value: unknown): ProfileSnapshot | null {
   if (!value || typeof value !== 'object') return null
   const profile = value as Partial<ProfileSnapshot>
@@ -429,7 +436,7 @@ function userDashboardItem(record: ReminderRecord) {
   const amount = visibleAmount(record)
   return {
     id: record.userId,
-    name: record.profile?.name || `User #${record.userId}`,
+    name: record.profile?.name || record.telegramName || `User #${record.userId}`,
     language: record.language,
     activity: record.profile?.activity ?? 'moderate',
     goal: record.goal,
@@ -518,8 +525,8 @@ async function dashboardPayload(env: Env, role: AdminRole) {
   const ownerId = configuredOwnerId(env)
   const recordsById = new Map(records.map((record) => [record.userId, record]))
   const admins = [
-    ...(ownerId ? [{ id: ownerId, role: 'owner' as const, name: recordsById.get(ownerId)?.profile?.name || `Owner #${ownerId}` }] : []),
-    ...grants.filter((grant) => grant.userId !== ownerId).map((grant) => ({ id: grant.userId, role: grant.role, name: recordsById.get(grant.userId)?.profile?.name || `${grant.role === 'owner' ? 'Owner' : 'Admin'} #${grant.userId}` })),
+    ...(ownerId ? [{ id: ownerId, role: 'owner' as const, name: recordsById.get(ownerId)?.profile?.name || recordsById.get(ownerId)?.telegramName || `Owner #${ownerId}` }] : []),
+    ...grants.filter((grant) => grant.userId !== ownerId).map((grant) => ({ id: grant.userId, role: grant.role, name: recordsById.get(grant.userId)?.profile?.name || recordsById.get(grant.userId)?.telegramName || `${grant.role === 'owner' ? 'Owner' : 'Admin'} #${grant.userId}` })),
   ]
   return {
     ok: true,
@@ -541,7 +548,7 @@ async function dashboardPayload(env: Env, role: AdminRole) {
       mode: accessSettings.mode,
       allowedUsers: accessGrants.map((grant) => ({
         id: grant.userId,
-        name: recordsById.get(grant.userId)?.profile?.name || `User #${grant.userId}`,
+        name: recordsById.get(grant.userId)?.profile?.name || recordsById.get(grant.userId)?.telegramName || `User #${grant.userId}`,
         addedAt: grant.addedAt,
       })),
     },
@@ -676,7 +683,7 @@ async function rememberChat(env: Env, message: TelegramMessage) {
   const existing = await readRecord(env, userId)
   if (existing?.blocked) return
   const record: ReminderRecord = existing ?? { userId, chatId: message.chat.id, goal: 2000, todayAmount: 0, dateKey: localDate('Europe/Moscow').dateKey, language: message.from?.language_code === 'ru' ? 'ru' : 'en', reminders: { enabled: false, intervalMinutes: 120, timeZone: 'Europe/Moscow' }, reminderIndex: 0, updatedAt: Date.now() }
-  await writeRecord(env, { ...record, chatId: message.chat.id, deliveryBlocked: false, updatedAt: Date.now() })
+  await writeRecord(env, { ...record, chatId: message.chat.id, telegramName: message.from ? telegramDisplayName(message.from) || record.telegramName : record.telegramName, deliveryBlocked: false, updatedAt: Date.now() })
 }
 
 async function handleMiniAppAccess(request: Request, env: Env) {
@@ -771,11 +778,11 @@ export default {
     if (!message?.text && !message?.entities?.length) return textResponse('ok')
     if (message.from && (await readRecord(env, message.from.id))?.blocked) return textResponse('ok')
     const command = commandFrom(message)
+    await rememberChat(env, message)
     if (message.from && !await hasBotAccess(env, message.from.id)) {
       if (command) await sendAccessClosedMessage(env, message.chat.id)
       return textResponse('ok')
     }
-    await rememberChat(env, message)
     if (message.from?.id === configuredOwnerId(env)) await setOwnerCommandMenu(env)
     if (await savePremiumEmojis(env, message)) {
       await sendMessage(env, message.chat.id, '✨ <b>Premium-эмодзи добавлен в библиотеку рассылок.</b>\n\nОткройте /admin и выберите его в блоке «Рассылка».')
