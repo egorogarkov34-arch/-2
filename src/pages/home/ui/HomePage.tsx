@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import { BellOff, BellRing, Droplets, Flame, History, Minus, PencilLine, Plus, Trophy } from 'lucide-react'
+import { useShallow } from 'zustand/shallow'
 import { useHydrationStore, selectTodayAmount } from '@/entities/hydration/model/store'
 import { BodyWater } from '@/entities/hydration/ui/BodyWater'
 import { ProgressRing } from '@/entities/hydration/ui/ProgressRing'
@@ -54,7 +55,18 @@ export default function HomePage() {
   const [toast, setToast] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('250')
   const [isEditingCustomAmount, setIsEditingCustomAmount] = useState(false)
-  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake, dayGoals, setActiveTab, updateProfile } = useHydrationStore()
+  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake, dayGoals, setActiveTab, updateProfile } = useHydrationStore(useShallow((state) => ({
+    goal: state.goal,
+    addWater: state.addWater,
+    removeWater: state.removeWater,
+    clearTodayWater: state.clearTodayWater,
+    setGoal: state.setGoal,
+    profile: state.profile,
+    intake: state.intake,
+    dayGoals: state.dayGoals,
+    setActiveTab: state.setActiveTab,
+    updateProfile: state.updateProfile,
+  })))
   const { language, t } = useTranslation()
   const millilitres = t('millilitres')
   const today = useHydrationStore(selectTodayAmount)

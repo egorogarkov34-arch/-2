@@ -22,7 +22,7 @@ export const ProgressRing = memo(function ProgressRing({ value, size = 124, stro
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
           initial={false}
           animate={{ strokeDashoffset: circumference * (1 - safeValue / 100) }}
-          transition={{ type: 'spring', stiffness: 65, damping: 15, mass: 0.7 }}
+          transition={{ duration: .58, ease: 'easeOut' }}
           style={{ strokeDasharray: circumference }}
         />
       </svg>

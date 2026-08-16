@@ -1,5 +1,5 @@
 import { memo, useId } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { clamp } from '@/shared/lib/format'
 import { useTranslation } from '@/shared/lib/i18n'
 import type { BodySkin } from '@/entities/hydration/model/types'
@@ -68,6 +68,7 @@ const skins: Record<BodySkin, SkinShape> = {
 /** Lightweight SVG skins with one shared, animated water-fill system. */
 export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-classic', compact = false }: Props) {
   const { language } = useTranslation()
+  const reduceMotion = useReducedMotion()
   const uid = useId().replaceAll(':', '')
   const clipId = `body-clip-${uid}`
   const waveId = `water-wave-${uid}`
@@ -76,6 +77,7 @@ export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-clas
   const expression = getHydrationMood(fillPercentage)
   const level = 390 - 3.9 * fillPercentage
   const hasWater = fillPercentage > 0.01
+  const shouldAnimateWave = !compact && !reduceMotion
   const waveSurface = 'M-70 6 C-40 -6 -14 19 18 7 S82 -7 116 7 S182 20 216 6 S281 -7 322 7 S366 19 400 5'
   const waterShape = `${waveSurface} V430 H-70Z`
   const label = language === 'en' ? `Body silhouette filled to ${Math.round(percentage)} percent` : `\u0421\u0438\u043b\u0443\u044d\u0442 \u0437\u0430\u043f\u043e\u043b\u043d\u0435\u043d \u0432\u043e\u0434\u043e\u0439 \u043d\u0430 ${Math.round(percentage)} \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u043e\u0432`
@@ -87,7 +89,7 @@ export const BodyWater = memo(function BodyWater({ percentage, skin = 'male-clas
           <linearGradient id={waveId} x1="140" y1="55" x2="140" y2="370" gradientUnits="userSpaceOnUse"><stop stopColor="#75CEFF"/><stop offset=".45" stopColor="#328DFF"/><stop offset="1" stopColor="#1462D8"/></linearGradient>
         </defs>
         <path d={shape.bodyPath} className="silhouette-base"/><path d={shape.headPath} className="head-fill"/>{shape.headExtras?.map((path) => <path d={path} className="head-fill" key={path}/>)}
-        <g clipPath={`url(#${clipId})`}>{hasWater && <motion.g className="water-level" style={{ willChange: 'transform' }} initial={{ y: 390 }} animate={{ y: level }} transition={{ type: 'spring', stiffness: 32, damping: 18, mass: .9 }}><motion.g className="water-wave" style={{ willChange: 'transform' }} animate={{ x: [-13, 13, -13] }} transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut' }}><path d={waterShape} fill={`url(#${waveId})`}/><path d={waveSurface} stroke="rgba(225,248,255,.92)" strokeWidth="2" fill="none" strokeLinecap="round"/></motion.g></motion.g>}</g>
+        <g clipPath={`url(#${clipId})`}>{hasWater && <motion.g className="water-level" style={{ willChange: 'transform' }} initial={{ y: 390 }} animate={{ y: level }} transition={{ duration: reduceMotion ? 0 : .72, ease: 'easeOut' }}><g className={`water-wave${shouldAnimateWave ? ' is-animated' : ''}`}><path d={waterShape} fill={`url(#${waveId})`}/><path d={waveSurface} stroke="rgba(225,248,255,.92)" strokeWidth="2" fill="none" strokeLinecap="round"/></g></motion.g>}</g>
         <path d={shape.bodyOutline} className="silhouette-stroke"/><path d={shape.headOutline} className="silhouette-stroke"/>{shape.headExtraOutlines?.map((path) => <path d={path} className="silhouette-stroke" key={path}/>)}
         {!compact && <BodyExpressionFace expression={expression}/>} 
       </svg>
