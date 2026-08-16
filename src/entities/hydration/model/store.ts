@@ -47,8 +47,8 @@ const mergeProfile = (...profiles: Array<Partial<Profile> | undefined>): Profile
 const syncUserState = (state: Pick<HydrationState, 'profile' | 'goal' | 'goalMode' | 'dayGoals'>) =>
   syncToCloud(cloudUserStateKey, { profile: state.profile, goal: state.goal, goalMode: state.goalMode, dayGoals: state.dayGoals } satisfies StoredUserState)
 
-const syncReminderSnapshot = (state: Pick<HydrationState, 'profile' | 'goal' | 'intake'>) =>
-  syncReminderState({ profile: state.profile, goal: state.goal, intake: state.intake })
+const syncReminderSnapshot = (state: Pick<HydrationState, 'profile' | 'goal' | 'intake' | 'dayGoals'>) =>
+  syncReminderState({ profile: state.profile, goal: state.goal, intake: state.intake, dayGoals: state.dayGoals })
 
 function changesHydrationNeed(profile: Partial<HydrationState['profile']>) {
   return hydrationProfileFields.some((field) => field in profile)
@@ -70,7 +70,7 @@ export const useHydrationStore = create<HydrationState>()(
           const dayGoals = { ...state.dayGoals, [todayKey()]: state.goal }
           syncToCloud('aquora:intake', intake)
           syncUserState({ ...state, dayGoals })
-          syncReminderSnapshot({ ...state, intake })
+          syncReminderSnapshot({ ...state, intake, dayGoals })
           return { intake, dayGoals }
         }),
       removeWater: (id) =>
@@ -99,7 +99,7 @@ export const useHydrationStore = create<HydrationState>()(
         set((state) => {
           const next = { goal, goalMode: 'custom' as const, dayGoals: { ...state.dayGoals, [todayKey()]: goal } }
           syncUserState({ ...state, ...next })
-          syncReminderSnapshot({ ...state, goal })
+          syncReminderSnapshot({ ...state, ...next })
           return next
         }),
       setAutomaticGoal: (goal) =>
@@ -107,7 +107,7 @@ export const useHydrationStore = create<HydrationState>()(
           if (state.goalMode !== 'auto') return {}
           const next = { goal, dayGoals: { ...state.dayGoals, [todayKey()]: goal } }
           syncUserState({ ...state, ...next })
-          syncReminderSnapshot({ ...state, goal })
+          syncReminderSnapshot({ ...state, ...next })
           return next
         }),
       updateProfile: (profile) =>
@@ -118,7 +118,7 @@ export const useHydrationStore = create<HydrationState>()(
             ? { profile: nextProfile, goal: automaticGoal, goalMode: 'auto' as const, dayGoals: { ...state.dayGoals, [todayKey()]: automaticGoal } }
             : { profile: nextProfile }
           syncUserState({ ...state, ...next })
-          syncReminderSnapshot({ ...state, profile: nextProfile, goal: next.goal ?? state.goal })
+          syncReminderSnapshot({ ...state, ...next, profile: nextProfile })
           return next
         }),
       restoreUserState: (stored) =>

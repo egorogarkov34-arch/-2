@@ -1,52 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Activity, Ban, BellRing, Crown, ImagePlus, LockKeyhole, Megaphone, Paperclip, RefreshCw, Send, ShieldCheck, Trash2, Unlock, UserPlus, UsersRound, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Activity, Ban, BellRing, CalendarDays, ChevronRight, Crown, Download, FileText, Gauge, ImagePlus, LockKeyhole, Megaphone, Paperclip, RefreshCw, Send, ShieldCheck, Target, Trash2, TrendingUp, Unlock, UserPlus, UsersRound, X } from 'lucide-react'
 import { getTelegramInitData, haptic } from '@/shared/lib/telegram'
+import type { DashboardData, DashboardUser, UserDetails } from '../model/types'
 
-type AdminRole = 'owner' | 'admin'
-
-interface DashboardUser {
-  id: number
-  name: string
-  language: 'ru' | 'en'
-  activity: 'low' | 'moderate' | 'high'
-  goal: number
-  todayAmount: number
-  progress: number
-  remindersEnabled: boolean
-  blocked: boolean
-  updatedAt: number
-  lastReminderAt: number | null
-}
-
-interface DashboardAdmin { id: number; role: AdminRole; name: string }
-interface AllowedUser { id: number; name: string; addedAt: number }
 interface BroadcastResult { ok: true; sent: number; failed: number; recipients: number }
 type BroadcastMediaKind = 'photo' | 'animation' | 'sticker'
 interface BroadcastMedia { kind: BroadcastMediaKind; dataUrl: string; name: string }
-interface PremiumEmoji { id: string; addedAt: number }
-
-interface DashboardData {
-  ok: true
-  role: AdminRole
-  generatedAt: number
-  metrics: {
-    totalUsers: number
-    activeToday: number
-    remindersEnabled: number
-    goalsReachedToday: number
-    totalTodayAmount: number
-    averageTodayAmount: number
-    averageGoal: number
-  }
-  users: DashboardUser[]
-  admins: DashboardAdmin[]
-  premiumEmojis: PremiumEmoji[]
-  access: {
-    mode: 'open' | 'private'
-    allowedUsers: AllowedUser[]
-  }
-}
 
 class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message) }
@@ -80,6 +40,10 @@ async function requestAdmin<T>(path: string, body: Record<string, unknown>) {
 
 function formatMl(value: number) { return `${number.format(value)} мл` }
 function updatedAt(value: number) { return value ? new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }).format(value) : '—' }
+function fullDate(value: number) { return value ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long', timeStyle: 'short' }).format(value) : '—' }
+function historyDate(value: string) { return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(`${value}T12:00:00`)) }
+
+const genderLabel = { male: 'Мужской', female: 'Женский', other: 'Не указан' } as const
 
 function AccessDenied({ reason }: { reason: string }) {
   const text = reason === 'Откройте панель из Telegram.' ? reason : 'Эта панель доступна только владельцу бота и назначенным администраторам.'
@@ -102,6 +66,10 @@ export default function AdminPage() {
   const [broadcastMediaKind, setBroadcastMediaKind] = useState<BroadcastMediaKind>('photo')
   const [broadcastMedia, setBroadcastMedia] = useState<BroadcastMedia | null>(null)
   const [premiumEmojiId, setPremiumEmojiId] = useState('')
+  const [selectedUser, setSelectedUser] = useState<UserDetails | null>(null)
+  const [loadingUserId, setLoadingUserId] = useState<number | null>(null)
+  const [showAllUsers, setShowAllUsers] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState<'analytics' | 'users' | null>(null)
   const broadcastFileInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async (quiet = false) => {
@@ -210,12 +178,39 @@ export default function AdminPage() {
     } finally { setSendingBroadcast(false) }
   }
 
+  const openUserProfile = async (userId: number) => {
+    setLoadingUserId(userId)
+    try {
+      const result = await requestAdmin<{ ok: true; user: UserDetails }>('/api/admin/users/details', { userId })
+      setSelectedUser(result.user)
+      haptic.tap()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'request_failed')
+      haptic.error()
+    } finally { setLoadingUserId(null) }
+  }
+
+  const exportPdf = async (kind: 'analytics' | 'users') => {
+    if (!data) return
+    setExportingPdf(kind)
+    try {
+      const pdf = await import('../lib/adminPdf')
+      if (kind === 'analytics') await pdf.exportAdminStatisticsPdf(data)
+      else await pdf.exportUserListPdf(data)
+      haptic.success()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'pdf_export_failed')
+      haptic.error()
+    } finally { setExportingPdf(null) }
+  }
+
   if (loading && !data) return <main className="page admin-page"><div className="admin-loading"><div className="skeleton title"/><div className="admin-skeleton-grid"><div className="skeleton"/><div className="skeleton"/><div className="skeleton"/></div><div className="skeleton admin-skeleton-list"/></div></main>
   if (error && !data) return <AccessDenied reason={error}/>
   if (!data) return null
 
   const { metrics } = data
   const isOwner = data.role === 'owner'
+  const visibleUsers = showAllUsers ? data.users : data.users.slice(0, 20)
   return <main className="page admin-page">
     <header className="admin-header">
       <div><p className="eyebrow">Secure administration</p><h1>Администрирование</h1><p className="admin-subtitle">Данные обновлены {updatedAt(data.generatedAt)}</p></div>
@@ -228,6 +223,22 @@ export default function AdminPage() {
       <article className="admin-metric-card"><span className="admin-metric-icon"><UsersRound size={17}/></span><small>Пользователи</small><strong>{number.format(metrics.totalUsers)}</strong><p>{number.format(metrics.activeToday)} активны сегодня</p></article>
       <article className="admin-metric-card"><span className="admin-metric-icon"><Activity size={17}/></span><small>Выпито сегодня</small><strong>{formatMl(metrics.totalTodayAmount)}</strong><p>в среднем {formatMl(metrics.averageTodayAmount)}</p></article>
       <article className="admin-metric-card"><span className="admin-metric-icon"><BellRing size={17}/></span><small>Напоминания</small><strong>{number.format(metrics.remindersEnabled)}</strong><p>{number.format(metrics.goalsReachedToday)} целей выполнено</p></article>
+    </section>
+
+    <section className="admin-section">
+      <div className="admin-section-heading"><div><p className="eyebrow">Analytics</p><h2>Подробная статистика</h2></div><TrendingUp size={18}/></div>
+      <div className="admin-analytics-card">
+        <div className="admin-analytics-grid">
+          <div><span><CalendarDays size={14}/> Активны за 7 дней</span><strong>{number.format(metrics.activeWeek)}</strong><small>из {number.format(metrics.totalUsers)} пользователей</small></div>
+          <div><span><Target size={14}/> Выполнение целей</span><strong>{metrics.goalCompletionRate}%</strong><small>за все дни с историей</small></div>
+          <div><span><Gauge size={14}/> Всего выпито</span><strong>{formatMl(metrics.trackedTotalAmount)}</strong><small>{number.format(metrics.trackedDays)} дней с водой</small></div>
+          <div><span><Ban size={14}/> Ограничения</span><strong>{number.format(metrics.blockedUsers)}</strong><small>пользователей заблокировано</small></div>
+        </div>
+        <div className="admin-report-actions">
+          <button type="button" onClick={() => void exportPdf('analytics')} disabled={exportingPdf !== null}><FileText size={16}/>{exportingPdf === 'analytics' ? 'Готовим PDF…' : 'Статистика в PDF'}</button>
+          <button type="button" className="secondary" onClick={() => void exportPdf('users')} disabled={exportingPdf !== null}><Download size={16}/>{exportingPdf === 'users' ? 'Готовим PDF…' : 'Список пользователей'}</button>
+        </div>
+      </div>
     </section>
 
     {isOwner && <section className="admin-section">
@@ -273,13 +284,15 @@ export default function AdminPage() {
     <section className="admin-section">
       <div className="admin-section-heading"><div><p className="eyebrow">Live overview</p><h2>Пользователи</h2></div><span>{number.format(metrics.totalUsers)}</span></div>
       <div className="admin-users-card">
-        {data.users.length === 0 ? <div className="admin-list-empty">Пока нет синхронизированных пользователей.</div> : data.users.map((user) => <article className="admin-user" key={user.id}>
+        {data.users.length === 0 ? <div className="admin-list-empty">Пока нет пользователей. Они появятся здесь сразу после команды /start.</div> : visibleUsers.map((user) => <article className="admin-user" key={user.id}>
           <div className="admin-user-avatar">{user.name.slice(0, 1).toUpperCase()}</div>
           <div className="admin-user-copy"><strong>{user.name}</strong><small>{activityLabel[user.activity]} активность · {user.language.toUpperCase()} · {updatedAt(user.updatedAt)}</small><div className="admin-progress"><i style={{ width: `${Math.min(100, user.progress)}%` }}/></div></div>
           <div className="admin-user-value"><strong>{formatMl(user.todayAmount)}</strong><small>из {formatMl(user.goal)}</small><span className={user.remindersEnabled ? 'is-on' : ''}>{user.remindersEnabled ? 'Напоминания' : 'Без напоминаний'}</span></div>
+          <button type="button" className="admin-user-profile-button" aria-label={`Открыть профиль ${user.name}`} onClick={() => void openUserProfile(user.id)} disabled={loadingUserId === user.id}>{loadingUserId === user.id ? <RefreshCw size={15} className="is-spinning"/> : <ChevronRight size={17}/>}</button>
           {isOwner && <button type="button" className={`admin-user-access ${user.blocked ? 'unblock' : ''}`} aria-label={`${user.blocked ? 'Разблокировать' : 'Заблокировать'} ${user.name}`} onClick={() => void updateUserAccess(user.blocked ? 'unblock' : 'block', user.id)} disabled={updatingAccess === user.id}>{user.blocked ? <Unlock size={15}/> : <Ban size={15}/>}<span>{user.blocked ? 'Разблокировать' : 'Заблокировать'}</span></button>}
         </article>)}
       </div>
+      {data.users.length > 20 && <button type="button" className="admin-show-more" onClick={() => setShowAllUsers((value) => !value)}>{showAllUsers ? 'Свернуть список' : `Показать всех (${number.format(data.users.length)})`}</button>}
     </section>
 
     <section className="admin-section">
@@ -289,6 +302,27 @@ export default function AdminPage() {
         {data.admins.map((admin) => <div className="admin-role-row" key={admin.id}><span className={`admin-role-icon ${admin.role === 'owner' ? 'owner' : ''}`}>{admin.role === 'owner' ? <Crown size={16}/> : <ShieldCheck size={16}/>}</span><div><strong>{admin.name}</strong><small>{admin.role === 'owner' ? 'Владелец бота' : `ID: ${admin.id}`}</small></div>{isOwner && admin.role === 'admin' && <button type="button" className="admin-remove-button" aria-label={`Удалить администратора ${admin.name}`} onClick={() => void updateRole('revoke', admin.id)} disabled={updatingRole === admin.id}><Trash2 size={16}/></button>}</div>)}
       </div>
     </section>
+
+    <AnimatePresence>
+      {selectedUser && <>
+        <motion.button type="button" className="sheet-scrim" aria-label="Закрыть профиль пользователя" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedUser(null)}/>
+        <motion.section className="bottom-sheet admin-user-profile-sheet" role="dialog" aria-modal="true" aria-label={`Профиль ${selectedUser.name}`} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 330, damping: 34 }}>
+          <div className="sheet-handle"/>
+          <div className="admin-detail-header"><div><p className="eyebrow">Профиль пользователя</p><h2>{selectedUser.name}</h2><span>ID: {selectedUser.id} · с нами с {fullDate(selectedUser.joinedAt)}</span></div><button type="button" className="icon-button" aria-label="Закрыть" onClick={() => setSelectedUser(null)}><X size={19}/></button></div>
+          <div className="admin-detail-hero">
+            <div><small>Сегодня</small><strong>{formatMl(selectedUser.todayAmount)}</strong><span>из {formatMl(selectedUser.goal)} · {selectedUser.progress}%</span></div>
+            <div><small>Статус</small><strong>{selectedUser.blocked ? 'Заблокирован' : 'Активен'}</strong><span>{selectedUser.reminders?.enabled ? `Напоминания: ${selectedUser.reminders.intervalMinutes} мин.` : 'Без напоминаний'}</span></div>
+          </div>
+          <div className="admin-detail-stat-grid">
+            <div><small>Всего выпито</small><strong>{formatMl(selectedUser.stats.totalAmount)}</strong></div><div><small>Среднее в день</small><strong>{formatMl(selectedUser.stats.averageDailyAmount)}</strong></div>
+            <div><small>Активных дней</small><strong>{number.format(selectedUser.stats.activeDays)}</strong></div><div><small>Дней с целью</small><strong>{number.format(selectedUser.stats.goalDays)}</strong></div>
+            <div><small>Личный рекорд</small><strong>{formatMl(selectedUser.stats.bestAmount)}</strong><span>{selectedUser.stats.bestDateKey ? historyDate(selectedUser.stats.bestDateKey) : '—'}</span></div><div><small>Последняя запись</small><strong>{selectedUser.stats.lastActiveDateKey ? historyDate(selectedUser.stats.lastActiveDateKey) : '—'}</strong></div>
+          </div>
+          <section className="admin-detail-section"><h3>Личные данные</h3>{selectedUser.profile ? <div className="admin-detail-list"><p><span>Возраст</span><strong>{selectedUser.profile.age} лет</strong></p><p><span>Пол</span><strong>{genderLabel[selectedUser.profile.gender]}</strong></p><p><span>Рост</span><strong>{selectedUser.profile.height} см</strong></p><p><span>Вес</span><strong>{selectedUser.profile.weight} кг</strong></p><p><span>Активность</span><strong>{activityLabel[selectedUser.profile.activity]}</strong></p></div> : <p className="admin-detail-empty">Пользователь пока не заполнял личные данные в Mini App.</p>}</section>
+          <section className="admin-detail-section"><h3>Последние дни</h3><div className="admin-detail-list">{selectedUser.stats.dailyHistory.length === 0 ? <p className="admin-detail-empty">Записей воды пока нет.</p> : selectedUser.stats.dailyHistory.slice(-7).reverse().map((point) => <p key={point.dateKey}><span>{historyDate(point.dateKey)}</span><strong>{formatMl(point.amount)} / {formatMl(point.goal)}</strong></p>)}</div></section>
+        </motion.section>
+      </>}
+    </AnimatePresence>
 
     <motion.p className="admin-security-note" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><LockKeyhole size={13}/> Доступ проверяется на сервере Cloudflare по подписи Telegram.</motion.p>
   </main>

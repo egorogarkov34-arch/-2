@@ -32,6 +32,12 @@ interface ReminderSettings {
   timeZone: string
 }
 
+interface DailyHydrationPoint {
+  dateKey: string
+  amount: number
+  goal: number
+}
+
 interface ReminderRecord {
   userId: number
   chatId: number
@@ -50,6 +56,8 @@ interface ReminderRecord {
   blockedBy?: number
   profile?: ProfileSnapshot
   telegramName?: string
+  createdAt?: number
+  dailyHistory?: DailyHydrationPoint[]
   updatedAt: number
 }
 
@@ -61,6 +69,7 @@ interface ReminderStatePayload {
   language: Language
   reminders: ReminderSettings
   profile?: ProfileSnapshot
+  dailyHistory?: DailyHydrationPoint[]
 }
 
 interface AdminGrant {
@@ -99,6 +108,7 @@ interface AdminUserAccessRequestPayload extends AdminRequestPayload {
   action: 'block' | 'unblock'
   userId: number
 }
+interface AdminUserDetailsRequestPayload extends AdminRequestPayload { userId: number }
 interface AdminAccessModeRequestPayload extends AdminRequestPayload {
   mode: AccessMode
 }
@@ -122,7 +132,10 @@ interface PremiumEmojiRecord { id: string; addedAt: number }
 const DEFAULT_AQUA_APP_URL = 'https://aquora-water.onrender.com'
 const ACCESS_SETTINGS_KEY = 'access:settings'
 const MAX_WEBHOOK_BODY_BYTES = 64 * 1024
-const MAX_STATE_BODY_BYTES = 16 * 1024
+// A signed hydration snapshot can contain up to a year of compact daily history.
+// Keep the limit comfortably above that payload while still rejecting oversized requests.
+const MAX_STATE_BODY_BYTES = 64 * 1024
+const MAX_DAILY_HISTORY_POINTS = 370
 const INVALID_REQUEST_WINDOW_MS = 60_000
 const MAX_INVALID_REQUESTS_PER_WINDOW = 40
 const INIT_DATA_MAX_AGE_SECONDS = 86_400
@@ -261,7 +274,7 @@ function commandFrom(message: TelegramMessage) { return (message.text?.trim().sp
 function isLanguage(value: unknown): value is Language { return value === 'ru' || value === 'en' }
 function isReminderInterval(value: unknown): value is ReminderInterval { return value === 30 || value === 60 || value === 120 || value === 180 }
 function isDateKey(value: unknown): value is string { return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) }
-function isFiniteNumber(value: unknown, min: number, max: number) { return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max }
+function isFiniteNumber(value: unknown, min: number, max: number): value is number { return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max }
 function cleanName(value: unknown) { return typeof value === 'string' ? value.trim().replace(/[<>]/g, '').slice(0, 64) : '' }
 function telegramDisplayName(user: TelegramUser) {
   const fullName = cleanName([user.first_name, user.last_name].filter((value): value is string => typeof value === 'string').join(' '))
@@ -278,6 +291,27 @@ function parseProfileSnapshot(value: unknown): ProfileSnapshot | null {
 }
 function normalizeTimeZone(value: unknown) { if (typeof value !== 'string' || value.length > 80) return 'Europe/Moscow'; try { new Intl.DateTimeFormat('en-US', { timeZone: value }).format(); return value } catch { return 'Europe/Moscow' } }
 
+function parseDailyHistory(value: unknown): DailyHydrationPoint[] | undefined | null {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > MAX_DAILY_HISTORY_POINTS) return null
+  const points = new Map<string, DailyHydrationPoint>()
+  for (const item of value) {
+    if (!item || typeof item !== 'object') return null
+    const point = item as Partial<DailyHydrationPoint>
+    if (!isDateKey(point.dateKey) || !isFiniteNumber(point.amount, 0, 100_000) || !isFiniteNumber(point.goal, 500, 10_000)) return null
+    points.set(point.dateKey, { dateKey: point.dateKey, amount: Math.round(point.amount), goal: Math.round(point.goal) })
+  }
+  return [...points.values()].sort((left, right) => left.dateKey.localeCompare(right.dateKey))
+}
+
+function mergeDailyHistory(existing: DailyHydrationPoint[] | undefined, incoming: DailyHydrationPoint[] | undefined, dateKey: string, amount: number, goal: number) {
+  const points = new Map<string, DailyHydrationPoint>()
+  for (const point of existing ?? []) points.set(point.dateKey, point)
+  for (const point of incoming ?? []) points.set(point.dateKey, point)
+  points.set(dateKey, { dateKey, amount: Math.round(Math.max(0, amount)), goal: Math.round(goal) })
+  return [...points.values()].sort((left, right) => left.dateKey.localeCompare(right.dateKey)).slice(-MAX_DAILY_HISTORY_POINTS)
+}
+
 function localDate(timeZone: string, now = new Date()) { const parts = new Intl.DateTimeFormat('en-CA', { timeZone: normalizeTimeZone(timeZone), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(now); const values = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value])); return { dateKey: `${values.year}-${values.month}-${values.day}`, hour: Number(values.hour) } }
 function parseReminderState(value: unknown): ReminderStatePayload | null {
   if (!value || typeof value !== 'object') return null
@@ -285,9 +319,11 @@ function parseReminderState(value: unknown): ReminderStatePayload | null {
   if (typeof payload.initData !== 'string' || payload.initData.length < 10 || payload.initData.length > 12_000 || !isDateKey(payload.dateKey) || !isFiniteNumber(payload.goal, 500, 10_000) || !isFiniteNumber(payload.todayAmount, 0, 100_000) || !isLanguage(payload.language) || !payload.reminders || typeof payload.reminders !== 'object') return null
   const reminders = payload.reminders as Partial<ReminderSettings>
   if (typeof reminders.enabled !== 'boolean' || !isReminderInterval(reminders.intervalMinutes)) return null
-  const profile = payload.profile === undefined ? undefined : parseProfileSnapshot(payload.profile)
+  const profile = payload.profile === undefined ? undefined : parseProfileSnapshot(payload.profile) ?? undefined
   if (payload.profile !== undefined && !profile) return null
-  return { initData: payload.initData, dateKey: payload.dateKey, goal: Math.round(payload.goal), todayAmount: Math.round(payload.todayAmount), language: payload.language, reminders: { enabled: reminders.enabled, intervalMinutes: reminders.intervalMinutes, timeZone: normalizeTimeZone(reminders.timeZone) }, profile }
+  const dailyHistory = parseDailyHistory(payload.dailyHistory)
+  if (dailyHistory === null) return null
+  return { initData: payload.initData, dateKey: payload.dateKey, goal: Math.round(payload.goal), todayAmount: Math.round(payload.todayAmount), language: payload.language, reminders: { enabled: reminders.enabled, intervalMinutes: reminders.intervalMinutes, timeZone: normalizeTimeZone(reminders.timeZone) }, profile, dailyHistory }
 }
 
 function toHex(value: ArrayBuffer) { return Array.from(new Uint8Array(value), (byte) => byte.toString(16).padStart(2, '0')).join('') }
@@ -392,6 +428,12 @@ function isAdminUserAccessRequest(value: unknown): value is AdminUserAccessReque
   return (request.action === 'block' || request.action === 'unblock') && Number.isSafeInteger(request.userId) && Number(request.userId) > 0
 }
 
+function isAdminUserDetailsRequest(value: unknown): value is AdminUserDetailsRequestPayload {
+  if (!isAdminRequest(value)) return false
+  const request = value as Partial<AdminUserDetailsRequestPayload>
+  return Number.isSafeInteger(request.userId) && Number(request.userId) > 0
+}
+
 function isAdminAccessModeRequest(value: unknown): value is AdminAccessModeRequestPayload {
   return isAdminRequest(value) && ((value as Partial<AdminAccessModeRequestPayload>).mode === 'open' || (value as Partial<AdminAccessModeRequestPayload>).mode === 'private')
 }
@@ -445,7 +487,31 @@ function userDashboardItem(record: ReminderRecord) {
     remindersEnabled: Boolean(record.reminders?.enabled && !record.deliveryBlocked),
     blocked: Boolean(record.blocked),
     updatedAt: record.updatedAt,
+    joinedAt: record.createdAt ?? record.updatedAt,
     lastReminderAt: record.lastReminderAt ?? null,
+  }
+}
+
+function recordHistory(record: ReminderRecord) {
+  return mergeDailyHistory(record.dailyHistory, undefined, record.dateKey, record.todayAmount, record.goal)
+}
+
+function recordAnalytics(record: ReminderRecord) {
+  const dailyHistory = recordHistory(record)
+  const activeDays = dailyHistory.filter((point) => point.amount > 0)
+  const goalDays = dailyHistory.filter((point) => point.amount >= point.goal)
+  const best = dailyHistory.reduce<DailyHydrationPoint | null>((current, point) => !current || point.amount > current.amount ? point : current, null)
+  const totalAmount = dailyHistory.reduce((sum, point) => sum + point.amount, 0)
+  const lastActive = activeDays[activeDays.length - 1] ?? null
+  return {
+    dailyHistory,
+    totalAmount,
+    activeDays: activeDays.length,
+    goalDays: goalDays.length,
+    averageDailyAmount: activeDays.length ? Math.round(totalAmount / activeDays.length) : 0,
+    bestAmount: best?.amount ?? 0,
+    bestDateKey: best?.amount ? best.dateKey : null,
+    lastActiveDateKey: lastActive?.dateKey ?? null,
   }
 }
 
@@ -519,9 +585,21 @@ async function dashboardPayload(env: Env, role: AdminRole) {
     readAccessSettings(env),
     role === 'owner' ? readAccessGrants(env) : Promise.resolve([] as AccessGrant[]),
   ])
-  const users = records.map(userDashboardItem).sort((left, right) => right.updatedAt - left.updatedAt).slice(0, 100)
+  const users = records.map(userDashboardItem).sort((left, right) => right.updatedAt - left.updatedAt)
   const activeToday = records.filter((record) => visibleAmount(record) > 0)
   const totalTodayAmount = activeToday.reduce((sum, record) => sum + visibleAmount(record), 0)
+  const analytics = records.map(recordAnalytics)
+  const trackedTotalAmount = analytics.reduce((sum, item) => sum + item.totalAmount, 0)
+  const trackedDays = analytics.reduce((sum, item) => sum + item.activeDays, 0)
+  const achievedGoals = analytics.reduce((sum, item) => sum + item.goalDays, 0)
+  const allHistoryDays = analytics.reduce((sum, item) => sum + item.dailyHistory.length, 0)
+  const recentDateKeys = new Set<string>()
+  for (let offset = 0; offset < 7; offset += 1) {
+    const date = new Date()
+    date.setDate(date.getDate() - offset)
+    recentDateKeys.add(localDate('Europe/Moscow', date).dateKey)
+  }
+  const activeWeek = records.filter((record) => recordHistory(record).some((point) => recentDateKeys.has(point.dateKey) && point.amount > 0)).length
   const ownerId = configuredOwnerId(env)
   const recordsById = new Map(records.map((record) => [record.userId, record]))
   const admins = [
@@ -540,6 +618,11 @@ async function dashboardPayload(env: Env, role: AdminRole) {
       totalTodayAmount,
       averageTodayAmount: activeToday.length ? Math.round(totalTodayAmount / activeToday.length) : 0,
       averageGoal: records.length ? Math.round(records.reduce((sum, record) => sum + record.goal, 0) / records.length) : 0,
+      activeWeek,
+      trackedTotalAmount,
+      trackedDays,
+      goalCompletionRate: allHistoryDays ? Math.round((achievedGoals / allHistoryDays) * 100) : 0,
+      blockedUsers: records.filter((record) => record.blocked).length,
     },
     users,
     admins,
@@ -563,6 +646,26 @@ async function handleAdminDashboard(request: Request, env: Env) {
   if ('response' in auth) return auth.response
   if (!env.AQUORA_USERS) return jsonResponse({ ok: false, error: 'storage_not_configured' }, 503, cors)
   return jsonResponse(await dashboardPayload(env, auth.role), 200, cors)
+}
+
+async function handleAdminUserDetails(request: Request, env: Env) {
+  const cors = corsHeaders(request, env)
+  if (request.method === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : textResponse('Forbidden', 403)
+  if (!cors || request.method !== 'POST') return textResponse('Forbidden', 403)
+  const auth = await authenticatedAdmin(request, env, cors)
+  if ('response' in auth) return auth.response
+  if (!isAdminUserDetailsRequest(auth.body)) return jsonResponse({ ok: false, error: 'invalid_request' }, 400, cors)
+  const record = await readRecord(env, auth.body.userId)
+  if (!record) return jsonResponse({ ok: false, error: 'user_not_found' }, 404, cors)
+  return jsonResponse({
+    ok: true,
+    user: {
+      ...userDashboardItem(record),
+      profile: record.profile ?? null,
+      reminders: record.reminders ? { enabled: record.reminders.enabled, intervalMinutes: record.reminders.intervalMinutes, timeZone: record.reminders.timeZone } : null,
+      stats: recordAnalytics(record),
+    },
+  }, 200, cors)
 }
 
 async function handleAdminRoles(request: Request, env: Env) {
@@ -682,8 +785,8 @@ async function rememberChat(env: Env, message: TelegramMessage) {
   if (!userId || message.chat.id !== userId || !env.AQUORA_USERS) return
   const existing = await readRecord(env, userId)
   if (existing?.blocked) return
-  const record: ReminderRecord = existing ?? { userId, chatId: message.chat.id, goal: 2000, todayAmount: 0, dateKey: localDate('Europe/Moscow').dateKey, language: message.from?.language_code === 'ru' ? 'ru' : 'en', reminders: { enabled: false, intervalMinutes: 120, timeZone: 'Europe/Moscow' }, reminderIndex: 0, updatedAt: Date.now() }
-  await writeRecord(env, { ...record, chatId: message.chat.id, telegramName: message.from ? telegramDisplayName(message.from) || record.telegramName : record.telegramName, deliveryBlocked: false, updatedAt: Date.now() })
+  const record: ReminderRecord = existing ?? { userId, chatId: message.chat.id, goal: 2000, todayAmount: 0, dateKey: localDate('Europe/Moscow').dateKey, language: message.from?.language_code === 'ru' ? 'ru' : 'en', reminders: { enabled: false, intervalMinutes: 120, timeZone: 'Europe/Moscow' }, dailyHistory: [], reminderIndex: 0, createdAt: Date.now(), updatedAt: Date.now() }
+  await writeRecord(env, { ...record, chatId: message.chat.id, telegramName: message.from ? telegramDisplayName(message.from) || record.telegramName : record.telegramName, createdAt: record.createdAt ?? Date.now(), deliveryBlocked: false, updatedAt: Date.now() })
 }
 
 async function handleMiniAppAccess(request: Request, env: Env) {
@@ -714,7 +817,7 @@ async function handleReminderState(request: Request, env: Env) {
   const existing = await readRecord(env, user.id)
   if (existing?.blocked) return jsonResponse({ ok: false, error: 'user_blocked' }, 403, cors)
   if (!await hasBotAccess(env, user.id)) return jsonResponse({ ok: false, error: 'access_closed' }, 403, cors)
-  const record: ReminderRecord = { userId: user.id, chatId: existing?.chatId ?? user.id, goal: payload.goal, todayAmount: payload.todayAmount, dateKey: payload.dateKey, language: payload.language, reminders: payload.reminders, profile: payload.profile ?? existing?.profile, reminderIndex: existing?.reminderIndex ?? 0, lastReminderAt: existing?.lastReminderAt, lastReminderDateKey: existing?.lastReminderDateKey, completedDateKey: existing?.completedDateKey, deliveryBlocked: false, blocked: false, updatedAt: Date.now() }
+  const record: ReminderRecord = { userId: user.id, chatId: existing?.chatId ?? user.id, goal: payload.goal, todayAmount: payload.todayAmount, dateKey: payload.dateKey, language: payload.language, reminders: payload.reminders, profile: payload.profile ?? existing?.profile, telegramName: telegramDisplayName(user) || existing?.telegramName, createdAt: existing?.createdAt ?? Date.now(), dailyHistory: mergeDailyHistory(existing?.dailyHistory, payload.dailyHistory, payload.dateKey, payload.todayAmount, payload.goal), reminderIndex: existing?.reminderIndex ?? 0, lastReminderAt: existing?.lastReminderAt, lastReminderDateKey: existing?.lastReminderDateKey, completedDateKey: existing?.completedDateKey, deliveryBlocked: false, blocked: false, updatedAt: Date.now() }
   if (!await writeRecord(env, record)) return jsonResponse({ ok: false, error: 'storage_unavailable' }, 503, cors)
   return jsonResponse({ ok: true }, 200, cors)
 }
@@ -743,13 +846,13 @@ async function processReminder(env: Env, key: string) {
   if (local.hour < REMINDER_START_HOUR || local.hour >= REMINDER_END_HOUR) return
   const isNewDay = value.dateKey !== local.dateKey
   const amount = isNewDay ? 0 : Math.max(0, value.todayAmount)
-  if (isNewDay) await writeRecord(env, { ...value, dateKey: local.dateKey, todayAmount: 0, completedDateKey: undefined, updatedAt: Date.now() })
+  if (isNewDay) await writeRecord(env, { ...value, dailyHistory: mergeDailyHistory(value.dailyHistory, undefined, value.dateKey, value.todayAmount, value.goal), dateKey: local.dateKey, todayAmount: 0, completedDateKey: undefined, updatedAt: Date.now() })
   if (amount >= value.goal) { if (value.completedDateKey !== local.dateKey) await writeRecord(env, { ...value, completedDateKey: local.dateKey, updatedAt: Date.now() }); return }
   const intervalMs = value.reminders.intervalMinutes * 60_000
   if (value.lastReminderDateKey === local.dateKey && value.lastReminderAt && Date.now() - value.lastReminderAt < intervalMs) return
   const result = await sendMessage(env, value.chatId, reminderText(value, amount))
   if (!result.ok && result.status !== 403) return
-  const next: ReminderRecord = { ...value, dateKey: local.dateKey, todayAmount: amount, lastReminderAt: Date.now(), lastReminderDateKey: local.dateKey, reminderIndex: value.reminderIndex + 1, updatedAt: Date.now() }
+  const next: ReminderRecord = { ...value, dailyHistory: mergeDailyHistory(value.dailyHistory, undefined, value.dateKey, value.todayAmount, value.goal), dateKey: local.dateKey, todayAmount: amount, lastReminderAt: Date.now(), lastReminderDateKey: local.dateKey, reminderIndex: value.reminderIndex + 1, updatedAt: Date.now() }
   if (result.status === 403) next.deliveryBlocked = true
   await writeRecord(env, next)
 }
@@ -761,6 +864,7 @@ export default {
     if (url.pathname === '/api/access') return handleMiniAppAccess(request, env)
     if (url.pathname === '/api/reminder-state') return handleReminderState(request, env)
     if (url.pathname === '/api/admin/dashboard') return handleAdminDashboard(request, env)
+    if (url.pathname === '/api/admin/users/details') return handleAdminUserDetails(request, env)
     if (url.pathname === '/api/admin/roles') return handleAdminRoles(request, env)
     if (url.pathname === '/api/admin/users/access') return handleAdminUserAccess(request, env)
     if (url.pathname === '/api/admin/access/mode') return handleAdminAccessMode(request, env)

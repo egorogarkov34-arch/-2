@@ -53,6 +53,7 @@ interface ReminderSyncState {
   profile: Profile
   goal: number
   intake: IntakeEntry[]
+  dayGoals: Record<string, number>
 }
 
 const botApiUrl = () => {
@@ -79,7 +80,7 @@ export const checkAppAccess = async (): Promise<AppAccessState> => {
 }
 
 /** Mirrors only the data required for a bot reminder. The Worker validates initData before accepting it. */
-export const syncReminderState = ({ profile, goal, intake }: ReminderSyncState) => {
+export const syncReminderState = ({ profile, goal, intake, dayGoals }: ReminderSyncState) => {
   const apiUrl = botApiUrl()
   const initData = getTelegramInitData()
   if (!apiUrl || !initData) return
@@ -88,6 +89,19 @@ export const syncReminderState = ({ profile, goal, intake }: ReminderSyncState) 
   const todayAmount = intake
     .filter((entry) => todayKey(new Date(entry.createdAt)) === dateKey)
     .reduce((sum, entry) => sum + entry.amount, 0)
+  const oldestHistoryDate = new Date()
+  oldestHistoryDate.setDate(oldestHistoryDate.getDate() - 369)
+  const oldestDateKey = todayKey(oldestHistoryDate)
+  const totalsByDay = new Map<string, number>()
+  for (const entry of intake) {
+    const entryDateKey = todayKey(new Date(entry.createdAt))
+    if (entryDateKey < oldestDateKey) continue
+    totalsByDay.set(entryDateKey, (totalsByDay.get(entryDateKey) ?? 0) + entry.amount)
+  }
+  if (!totalsByDay.has(dateKey)) totalsByDay.set(dateKey, todayAmount)
+  const dailyHistory = [...totalsByDay.entries()]
+    .map(([historyDateKey, amount]) => ({ dateKey: historyDateKey, amount: Math.round(amount), goal: Math.round(dayGoals[historyDateKey] ?? goal) }))
+    .sort((left, right) => left.dateKey.localeCompare(right.dateKey))
 
   void fetch(`${apiUrl}/api/reminder-state`, {
     method: 'POST',
@@ -97,6 +111,7 @@ export const syncReminderState = ({ profile, goal, intake }: ReminderSyncState) 
       dateKey,
       goal,
       todayAmount,
+      dailyHistory,
       language: profile.language,
       reminders: profile.reminders,
       profile: {
