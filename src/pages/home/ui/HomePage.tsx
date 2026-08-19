@@ -52,10 +52,11 @@ function correctedStreak(calculated: number, dailyTotals: Record<string, number>
   const anchor = startOfDay(new Date(`${anchorDateKey}T12:00:00`))
   if (Number.isNaN(anchor.getTime())) return manualStreak
   const today = startOfDay(new Date())
-  if (anchor >= today) return manualStreak
   const reachedGoal = (date: Date) => (dailyTotals[todayKey(date)] ?? 0) >= (dayGoals[todayKey(date)] ?? goal)
+  if (anchor >= today) return reachedGoal(today) ? manualStreak + 1 : manualStreak
+  if (!reachedGoal(anchor)) return calculated
   let cursor = addDays(anchor, 1)
-  let value = manualStreak
+  let value = manualStreak + 1
   while (cursor < today) {
     if (!reachedGoal(cursor)) return calculated
     value += 1
