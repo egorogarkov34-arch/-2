@@ -41,13 +41,21 @@ export function App() {
         if (!active) return
         if (stored) { restoreUserState(stored); return }
         const current = useHydrationStore.getState()
-        syncToCloud('aquora:user-state', { profile: current.profile, goal: current.goal, goalMode: current.goalMode, dayGoals: current.dayGoals, manualStreak: current.manualStreak } satisfies StoredUserState)
+        syncToCloud('aquora:user-state', { profile: current.profile, goal: current.goal, goalMode: current.goalMode, dayGoals: current.dayGoals, manualStreak: current.manualStreak, manualStreakAnchorDateKey: current.manualStreakAnchorDateKey } satisfies StoredUserState)
       }).finally(() => { if (active) syncCurrentReminderState() })
       frame = requestAnimationFrame(() => setReady(true))
     }
     void prepare()
     return () => { active = false; if (frame !== undefined) cancelAnimationFrame(frame) }
   }, [isAdminMode, restoreUserState])
+  useEffect(() => {
+    if (isAdminMode || accessState !== 'allowed') return
+    const syncWhenVisible = () => { if (document.visibilityState === 'visible') syncCurrentReminderState() }
+    const interval = window.setInterval(syncCurrentReminderState, 60_000)
+    document.addEventListener('visibilitychange', syncWhenVisible)
+    window.addEventListener('focus', syncWhenVisible)
+    return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', syncWhenVisible); window.removeEventListener('focus', syncWhenVisible) }
+  }, [accessState, isAdminMode])
   useEffect(() => { telegram()?.MainButton?.hide() }, [activeTab])
   useEffect(() => {
     document.body.dataset.theme = 'dark'

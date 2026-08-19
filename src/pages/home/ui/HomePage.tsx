@@ -46,6 +46,24 @@ function calculateStreak(dailyTotals: Record<string, number>, dayGoals: Record<s
   return days
 }
 
+function correctedStreak(calculated: number, dailyTotals: Record<string, number>, dayGoals: Record<string, number>, goal: number, manualStreak: number | null, anchorDateKey: string | null) {
+  if (manualStreak === null) return calculated
+  if (!anchorDateKey) return manualStreak
+  const anchor = startOfDay(new Date(`${anchorDateKey}T12:00:00`))
+  if (Number.isNaN(anchor.getTime())) return manualStreak
+  const today = startOfDay(new Date())
+  if (anchor >= today) return manualStreak
+  const reachedGoal = (date: Date) => (dailyTotals[todayKey(date)] ?? 0) >= (dayGoals[todayKey(date)] ?? goal)
+  let cursor = addDays(anchor, 1)
+  let value = manualStreak
+  while (cursor < today) {
+    if (!reachedGoal(cursor)) return calculated
+    value += 1
+    cursor = addDays(cursor, 1)
+  }
+  return reachedGoal(today) ? value + 1 : value
+}
+
 export default function HomePage() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -55,7 +73,7 @@ export default function HomePage() {
   const [toast, setToast] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('250')
   const [isEditingCustomAmount, setIsEditingCustomAmount] = useState(false)
-  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake, dayGoals, manualStreak, setActiveTab, updateProfile } = useHydrationStore(useShallow((state) => ({
+  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake, dayGoals, manualStreak, manualStreakAnchorDateKey, setActiveTab, updateProfile } = useHydrationStore(useShallow((state) => ({
     goal: state.goal,
     addWater: state.addWater,
     removeWater: state.removeWater,
@@ -65,6 +83,7 @@ export default function HomePage() {
     intake: state.intake,
     dayGoals: state.dayGoals,
     manualStreak: state.manualStreak,
+    manualStreakAnchorDateKey: state.manualStreakAnchorDateKey,
     setActiveTab: state.setActiveTab,
     updateProfile: state.updateProfile,
   })))
@@ -95,7 +114,7 @@ export default function HomePage() {
   ), [dailyTotals])
 
   const calculatedStreak = useMemo(() => calculateStreak(dailyTotals, dayGoals, goal), [dailyTotals, dayGoals, goal])
-  const streak = manualStreak ?? calculatedStreak
+  const streak = correctedStreak(calculatedStreak, dailyTotals, dayGoals, goal, manualStreak, manualStreakAnchorDateKey)
   const bestDate = useMemo(() => {
     if (bestDay.amount === 0) return language === 'en' ? 'No entries yet' : 'Пока нет записей'
     return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(new Date(`${bestDay.date}T12:00:00`))

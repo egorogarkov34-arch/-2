@@ -99,6 +99,24 @@ function calculateStreak(amounts: Record<string, number>, goals: Record<string, 
   return streak
 }
 
+function correctedStreak(calculated: number, amounts: Record<string, number>, goals: Record<string, number>, fallbackGoal: number, now: Date, manualStreak: number | null, anchorDateKey: string | null) {
+  if (manualStreak === null) return calculated
+  if (!anchorDateKey) return manualStreak
+  const anchor = dayStart(new Date(`${anchorDateKey}T12:00:00`))
+  if (Number.isNaN(anchor.getTime())) return manualStreak
+  const today = dayStart(now)
+  if (anchor >= today) return manualStreak
+  const reached = (date: Date) => (amounts[todayKey(date)] ?? 0) >= (goals[todayKey(date)] ?? fallbackGoal)
+  let cursor = addDays(anchor, 1)
+  let value = manualStreak
+  while (cursor < today) {
+    if (!reached(cursor)) return calculated
+    value += 1
+    cursor = addDays(cursor, 1)
+  }
+  return reached(today) ? value + 1 : value
+}
+
 function streakLabel(value: number, language: Language) {
   if (language === 'en') return `${value} ${value === 1 ? 'day' : 'days'}`
   const tail = value % 100
@@ -193,6 +211,7 @@ export default function StatisticsPage() {
   const goal = useHydrationStore((state) => state.goal)
   const dayGoals = useHydrationStore((state) => state.dayGoals)
   const manualStreak = useHydrationStore((state) => state.manualStreak)
+  const manualStreakAnchorDateKey = useHydrationStore((state) => state.manualStreakAnchorDateKey)
   const setGoal = useHydrationStore((state) => state.setGoal)
   const { language } = useTranslation()
   const locale = language === 'ru' ? 'ru-RU' : 'en-US'
@@ -267,7 +286,8 @@ export default function StatisticsPage() {
     }
   }, [dayGoals, goal, intake, language, locale, period, selectedMonth, selectedYear])
 
-  const streak = manualStreak ?? calculateStreak(buildAmounts(intake), dayGoals, goal, now)
+  const amounts = useMemo(() => buildAmounts(intake), [intake])
+  const streak = correctedStreak(calculateStreak(amounts, dayGoals, goal, now), amounts, dayGoals, goal, now, manualStreak, manualStreakAnchorDateKey)
   const periodTitle = language === 'ru' ? (period === 'week' ? 'Неделя' : period === 'month' ? 'Месяц' : 'Год') : (period === 'week' ? 'Week' : period === 'month' ? 'Month' : 'Year')
   const historyTitle = language === 'ru' ? (period === 'year' ? `Месяцы ${selectedYear} года` : `История за ${period === 'week' ? 'неделю' : 'месяц'}`) : (period === 'year' ? `${selectedYear} months` : `${periodTitle} history`)
   const maxAmount = Math.max(statistics.dailyGoal, ...statistics.data.map((entry) => entry.amount), 1000)

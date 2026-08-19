@@ -44,13 +44,15 @@ const mergeProfile = (...profiles: Array<Partial<Profile> | undefined>): Profile
   }
 }
 
-const syncUserState = (state: Pick<HydrationState, 'profile' | 'goal' | 'goalMode' | 'dayGoals' | 'manualStreak'>) =>
-  syncToCloud(cloudUserStateKey, { profile: state.profile, goal: state.goal, goalMode: state.goalMode, dayGoals: state.dayGoals, manualStreak: state.manualStreak } satisfies StoredUserState)
+const syncUserState = (state: Pick<HydrationState, 'profile' | 'goal' | 'goalMode' | 'dayGoals' | 'manualStreak' | 'manualStreakAnchorDateKey'>) =>
+  syncToCloud(cloudUserStateKey, { profile: state.profile, goal: state.goal, goalMode: state.goalMode, dayGoals: state.dayGoals, manualStreak: state.manualStreak, manualStreakAnchorDateKey: state.manualStreakAnchorDateKey } satisfies StoredUserState)
 
 const syncReminderSnapshot = (state: Pick<HydrationState, 'profile' | 'goal' | 'intake' | 'dayGoals'>) =>
-  void syncReminderState({ profile: state.profile, goal: state.goal, intake: state.intake, dayGoals: state.dayGoals }).then((manualStreak) => {
-    if (manualStreak === undefined || useHydrationStore.getState().manualStreak === manualStreak) return
-    useHydrationStore.getState().setManualStreak(manualStreak)
+  void syncReminderState({ profile: state.profile, goal: state.goal, intake: state.intake, dayGoals: state.dayGoals }).then((correction) => {
+    if (correction === undefined) return
+    const current = useHydrationStore.getState()
+    if (current.manualStreak === correction.manualStreak && current.manualStreakAnchorDateKey === correction.manualStreakAnchorDateKey) return
+    current.setManualStreak(correction.manualStreak, correction.manualStreakAnchorDateKey)
   })
 
 function changesHydrationNeed(profile: Partial<HydrationState['profile']>) {
@@ -66,6 +68,7 @@ export const useHydrationStore = create<HydrationState>()(
       intake: [],
       dayGoals: {},
       manualStreak: null,
+      manualStreakAnchorDateKey: null,
       profile: initialProfile,
       setActiveTab: (activeTab) => set({ activeTab }),
       addWater: (amount) =>
@@ -114,9 +117,9 @@ export const useHydrationStore = create<HydrationState>()(
           syncReminderSnapshot({ ...state, ...next })
           return next
         }),
-      setManualStreak: (manualStreak) =>
+      setManualStreak: (manualStreak, manualStreakAnchorDateKey) =>
         set((state) => {
-          const next = { manualStreak }
+          const next = { manualStreak, manualStreakAnchorDateKey: manualStreak === null ? null : manualStreakAnchorDateKey }
           syncUserState({ ...state, ...next })
           return next
         }),
@@ -139,7 +142,8 @@ export const useHydrationStore = create<HydrationState>()(
           const manualStreak = stored.manualStreak === null || (typeof stored.manualStreak === 'number' && Number.isSafeInteger(stored.manualStreak) && stored.manualStreak >= 0 && stored.manualStreak <= 9_999)
             ? stored.manualStreak
             : state.manualStreak
-          return { profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode, dayGoals: { ...state.dayGoals, ...stored.dayGoals }, manualStreak }
+          const manualStreakAnchorDateKey = manualStreak === null ? null : typeof stored.manualStreakAnchorDateKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(stored.manualStreakAnchorDateKey) ? stored.manualStreakAnchorDateKey : state.manualStreakAnchorDateKey
+          return { profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode, dayGoals: { ...state.dayGoals, ...stored.dayGoals }, manualStreak, manualStreakAnchorDateKey }
         }),
     }),
     {
@@ -152,7 +156,8 @@ export const useHydrationStore = create<HydrationState>()(
         const manualStreak = persisted.manualStreak === null || (typeof persisted.manualStreak === 'number' && Number.isSafeInteger(persisted.manualStreak) && persisted.manualStreak >= 0 && persisted.manualStreak <= 9_999)
           ? persisted.manualStreak
           : currentState.manualStreak
-        return { ...currentState, ...persisted, profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode, dayGoals: { ...currentState.dayGoals, ...persisted.dayGoals }, manualStreak }
+        const manualStreakAnchorDateKey = manualStreak === null ? null : typeof persisted.manualStreakAnchorDateKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(persisted.manualStreakAnchorDateKey) ? persisted.manualStreakAnchorDateKey : currentState.manualStreakAnchorDateKey
+        return { ...currentState, ...persisted, profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode, dayGoals: { ...currentState.dayGoals, ...persisted.dayGoals }, manualStreak, manualStreakAnchorDateKey }
       },
     },
   ),

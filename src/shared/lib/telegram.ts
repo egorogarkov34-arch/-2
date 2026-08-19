@@ -80,7 +80,10 @@ export const checkAppAccess = async (): Promise<AppAccessState> => {
 }
 
 /** Mirrors only the data required for a bot reminder. The Worker validates initData before accepting it. */
-export type ManualStreakSyncValue = number | null | undefined
+export type ManualStreakSyncValue = {
+  manualStreak: number | null
+  manualStreakAnchorDateKey: string | null
+} | undefined
 
 export const syncReminderState = async ({ profile, goal, intake, dayGoals }: ReminderSyncState): Promise<ManualStreakSyncValue> => {
   const apiUrl = botApiUrl()
@@ -130,9 +133,12 @@ export const syncReminderState = async ({ profile, goal, intake, dayGoals }: Rem
     const payload: unknown = await response.json().catch(() => null)
     if (!response.ok || !payload || typeof payload !== 'object' || !('manualStreak' in payload)) return undefined
     const manualStreak = payload.manualStreak
-    if (manualStreak === null) return null
-    return typeof manualStreak === 'number' && Number.isSafeInteger(manualStreak) && manualStreak >= 0 && manualStreak <= 9_999
-      ? manualStreak
-      : undefined
+    const anchorDateKey = 'manualStreakAnchorDateKey' in payload ? payload.manualStreakAnchorDateKey : null
+    if (manualStreak === null) return { manualStreak: null, manualStreakAnchorDateKey: null }
+    if (typeof manualStreak !== 'number' || !Number.isSafeInteger(manualStreak) || manualStreak < 0 || manualStreak > 9_999) return undefined
+    return {
+      manualStreak,
+      manualStreakAnchorDateKey: typeof anchorDateKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(anchorDateKey) ? anchorDateKey : null,
+    }
   } catch { return undefined }
 }

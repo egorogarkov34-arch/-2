@@ -55,6 +55,7 @@ interface ReminderRecord {
   blockedAt?: number
   blockedBy?: number
   manualStreak?: number | null
+  manualStreakAnchorDateKey?: string | null
   profile?: ProfileSnapshot
   telegramName?: string
   createdAt?: number
@@ -692,7 +693,7 @@ async function handleAdminUserStreak(request: Request, env: Env) {
   if (!env.AQUORA_USERS) return jsonResponse({ ok: false, error: 'storage_not_configured' }, 503, cors)
   const record = await readRecord(env, auth.body.userId)
   if (!record) return jsonResponse({ ok: false, error: 'user_not_found' }, 404, cors)
-  const next: ReminderRecord = { ...record, manualStreak: auth.body.manualStreak, updatedAt: Date.now() }
+  const next: ReminderRecord = { ...record, manualStreak: auth.body.manualStreak, manualStreakAnchorDateKey: auth.body.manualStreak === null ? null : localDate('Europe/Moscow').dateKey, updatedAt: Date.now() }
   if (!await writeRecord(env, next)) return jsonResponse({ ok: false, error: 'storage_unavailable' }, 503, cors)
   return jsonResponse({ ok: true, userId: record.userId, manualStreak: next.manualStreak }, 200, cors)
 }
@@ -846,9 +847,9 @@ async function handleReminderState(request: Request, env: Env) {
   const existing = await readRecord(env, user.id)
   if (existing?.blocked) return jsonResponse({ ok: false, error: 'user_blocked' }, 403, cors)
   if (!await hasBotAccess(env, user.id)) return jsonResponse({ ok: false, error: 'access_closed' }, 403, cors)
-  const record: ReminderRecord = { userId: user.id, chatId: existing?.chatId ?? user.id, goal: payload.goal, todayAmount: payload.todayAmount, dateKey: payload.dateKey, language: payload.language, reminders: payload.reminders, profile: payload.profile ?? existing?.profile, telegramName: telegramDisplayName(user) || existing?.telegramName, createdAt: existing?.createdAt ?? Date.now(), dailyHistory: mergeDailyHistory(existing?.dailyHistory, payload.dailyHistory, payload.dateKey, payload.todayAmount, payload.goal), reminderIndex: existing?.reminderIndex ?? 0, lastReminderAt: existing?.lastReminderAt, lastReminderDateKey: existing?.lastReminderDateKey, completedDateKey: existing?.completedDateKey, deliveryBlocked: false, blocked: false, manualStreak: existing?.manualStreak ?? null, updatedAt: Date.now() }
+  const record: ReminderRecord = { userId: user.id, chatId: existing?.chatId ?? user.id, goal: payload.goal, todayAmount: payload.todayAmount, dateKey: payload.dateKey, language: payload.language, reminders: payload.reminders, profile: payload.profile ?? existing?.profile, telegramName: telegramDisplayName(user) || existing?.telegramName, createdAt: existing?.createdAt ?? Date.now(), dailyHistory: mergeDailyHistory(existing?.dailyHistory, payload.dailyHistory, payload.dateKey, payload.todayAmount, payload.goal), reminderIndex: existing?.reminderIndex ?? 0, lastReminderAt: existing?.lastReminderAt, lastReminderDateKey: existing?.lastReminderDateKey, completedDateKey: existing?.completedDateKey, deliveryBlocked: false, blocked: false, manualStreak: existing?.manualStreak ?? null, manualStreakAnchorDateKey: existing?.manualStreak === null || existing?.manualStreak === undefined ? null : existing.manualStreakAnchorDateKey ?? payload.dateKey, updatedAt: Date.now() }
   if (!await writeRecord(env, record)) return jsonResponse({ ok: false, error: 'storage_unavailable' }, 503, cors)
-  return jsonResponse({ ok: true, manualStreak: record.manualStreak }, 200, cors)
+  return jsonResponse({ ok: true, manualStreak: record.manualStreak, manualStreakAnchorDateKey: record.manualStreakAnchorDateKey ?? null }, 200, cors)
 }
 
 function reminderText(record: ReminderRecord, amount: number) {
