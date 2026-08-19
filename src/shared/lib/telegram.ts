@@ -61,6 +61,49 @@ const botApiUrl = () => {
   return (configuredUrl || 'https://aquora-water-bot.egorogarkov34.workers.dev').replace(/\/+$/, '')
 }
 
+export interface BarcodeBeverageProduct {
+  barcode: string
+  name: string
+  brand?: string
+  imageUrl?: string
+  volumeMl?: number
+  nutritionPer100ml: {
+    caloriesKcal?: number
+    sugarsG?: number
+    saltG?: number
+    sodiumMg?: number
+    caffeineMg?: number
+  }
+}
+
+export type BarcodeLookupResult =
+  | { ok: true; product: BarcodeBeverageProduct }
+  | { ok: false; reason: 'not_found' | 'unavailable' | 'unauthorized' }
+
+/** Looks up a barcode through the Worker, so catalogue credentials and requests stay off the client. */
+export const lookupBeverageBarcode = async (barcode: string): Promise<BarcodeLookupResult> => {
+  const initData = getTelegramInitData()
+  if (!/^\d{8,14}$/.test(barcode) || !initData) return { ok: false, reason: 'unavailable' }
+  try {
+    const response = await fetch(`${botApiUrl()}/api/beverages/barcode`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ initData, barcode }),
+    })
+    const payload: unknown = await response.json().catch(() => null)
+    if (response.status === 404) return { ok: false, reason: 'not_found' }
+    if (response.status === 401 || response.status === 403) return { ok: false, reason: 'unauthorized' }
+    if (!response.ok || !payload || typeof payload !== 'object' || !('product' in payload)) return { ok: false, reason: 'unavailable' }
+    const product = payload.product
+    if (!product || typeof product !== 'object') return { ok: false, reason: 'unavailable' }
+    const candidate = product as Partial<BarcodeBeverageProduct>
+    if (typeof candidate.barcode !== 'string' || typeof candidate.name !== 'string' || !candidate.nutritionPer100ml || typeof candidate.nutritionPer100ml !== 'object') return { ok: false, reason: 'unavailable' }
+    return { ok: true, product: candidate as BarcodeBeverageProduct }
+  } catch {
+    return { ok: false, reason: 'unavailable' }
+  }
+}
+
 export type AppAccessState = 'allowed' | 'closed' | 'unavailable'
 
 /** The Worker verifies the Telegram signature before returning access status. */

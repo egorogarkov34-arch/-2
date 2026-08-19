@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { HydrationState, IntakeEntry, Profile, ReminderSettings, StoredUserState } from './types'
+import type { BeverageEntryDetails, HydrationState, IntakeEntry, Profile, ReminderSettings, StoredUserState } from './types'
 import { syncReminderState, syncToCloud, telegram } from '@/shared/lib/telegram'
 import { calculateWaterGoal } from './calculateGoal'
 import { todayKey } from '@/shared/lib/format'
@@ -74,6 +74,21 @@ export const useHydrationStore = create<HydrationState>()(
       addWater: (amount) =>
         set((state) => {
           const intake = [...state.intake, { id: crypto.randomUUID(), amount, createdAt: new Date().toISOString() }]
+          const dayGoals = { ...state.dayGoals, [todayKey()]: state.goal }
+          syncToCloud('aquora:intake', intake)
+          syncUserState({ ...state, dayGoals })
+          syncReminderSnapshot({ ...state, intake, dayGoals })
+          return { intake, dayGoals }
+        }),
+      addBeverage: (amount, beverage) =>
+        set((state) => {
+          const entry: IntakeEntry = {
+            id: crypto.randomUUID(),
+            amount,
+            createdAt: new Date().toISOString(),
+            beverage: sanitizeBeverageDetails(beverage),
+          }
+          const intake = [...state.intake, entry]
           const dayGoals = { ...state.dayGoals, [todayKey()]: state.goal }
           syncToCloud('aquora:intake', intake)
           syncUserState({ ...state, dayGoals })
@@ -162,6 +177,23 @@ export const useHydrationStore = create<HydrationState>()(
     },
   ),
 )
+
+function sanitizeBeverageDetails(beverage: BeverageEntryDetails): BeverageEntryDetails {
+  const numberValue = (value: number | undefined) => Number.isFinite(value) && value !== undefined ? Math.max(0, Math.round(value * 100) / 100) : undefined
+  return {
+    productName: beverage.productName.trim().slice(0, 140) || 'Напиток',
+    ...(beverage.brand?.trim() ? { brand: beverage.brand.trim().slice(0, 100) } : {}),
+    ...(beverage.barcode?.match(/^\d{8,14}$/) ? { barcode: beverage.barcode } : {}),
+    ...(beverage.imageUrl?.startsWith('https://') ? { imageUrl: beverage.imageUrl.slice(0, 600) } : {}),
+    nutrition: {
+      ...(numberValue(beverage.nutrition.caloriesKcal) !== undefined ? { caloriesKcal: numberValue(beverage.nutrition.caloriesKcal) } : {}),
+      ...(numberValue(beverage.nutrition.sugarsG) !== undefined ? { sugarsG: numberValue(beverage.nutrition.sugarsG) } : {}),
+      ...(numberValue(beverage.nutrition.saltG) !== undefined ? { saltG: numberValue(beverage.nutrition.saltG) } : {}),
+      ...(numberValue(beverage.nutrition.sodiumMg) !== undefined ? { sodiumMg: numberValue(beverage.nutrition.sodiumMg) } : {}),
+      ...(numberValue(beverage.nutrition.caffeineMg) !== undefined ? { caffeineMg: numberValue(beverage.nutrition.caffeineMg) } : {}),
+    },
+  }
+}
 
 export const syncCurrentReminderState = () => {
   const state = useHydrationStore.getState()

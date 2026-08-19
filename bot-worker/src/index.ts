@@ -127,6 +127,10 @@ interface AdminBroadcastRequestPayload extends AdminRequestPayload {
   media?: BroadcastMediaPayload
   premiumEmojiId?: string
 }
+interface BeverageLookupRequestPayload {
+  initData: string
+  barcode: string
+}
 type BroadcastMediaKind = 'photo' | 'animation' | 'sticker'
 interface BroadcastMediaPayload {
   kind: BroadcastMediaKind
@@ -150,6 +154,7 @@ const REMINDER_END_HOUR = 22
 const REMINDER_BATCH_SIZE = 20
 const MAX_BROADCAST_MEDIA_BYTES = 8 * 1024 * 1024
 const MAX_BROADCAST_MEDIA_DATA_URL_LENGTH = 11_200_000
+const MAX_BEVERAGE_LOOKUP_BODY_BYTES = 16 * 1024
 // Permanent owner allowlist. This is intentionally a numeric Telegram user ID,
 // not a secret: it provides a reliable server-side access check even if a
 // dashboard environment variable is unavailable in a Worker deployment.
@@ -833,6 +838,82 @@ async function handleMiniAppAccess(request: Request, env: Env) {
   return jsonResponse({ ok: true, allowed }, 200, cors)
 }
 
+function textValue(value: unknown, maxLength = 500) {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
+}
+
+function nonNegativeNumber(value: unknown) {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value.replace(',', '.')) : Number.NaN
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100_000 ? parsed : undefined
+}
+
+function volumeFromQuantity(value: unknown) {
+  const quantity = textValue(value, 80).replace(',', '.')
+  const match = /([0-9]+(?:\.[0-9]+)?)\s*(ml|мл|l|л)\b/i.exec(quantity)
+  if (!match) return undefined
+  const amount = Number(match[1])
+  if (!Number.isFinite(amount) || amount <= 0) return undefined
+  const millilitres = /^(l|л)$/i.test(match[2]) ? amount * 1_000 : amount
+  return Math.round(millilitres) > 0 && Math.round(millilitres) <= 5_000 ? Math.round(millilitres) : undefined
+}
+
+function productPayload(barcode: string, payload: unknown) {
+  if (!payload || typeof payload !== 'object') return null
+  const product = (payload as { product?: unknown }).product
+  if (!product || typeof product !== 'object') return null
+  const data = product as Record<string, unknown>
+  const nutriments = data.nutriments && typeof data.nutriments === 'object' ? data.nutriments as Record<string, unknown> : {}
+  const name = textValue(data.product_name_ru) || textValue(data.product_name) || textValue(data.generic_name_ru) || textValue(data.generic_name)
+  if (!name) return null
+  const caffeine = nonNegativeNumber(nutriments.caffeine_100g)
+  const caffeineUnit = textValue(nutriments.caffeine_unit, 12).toLowerCase()
+  const sodiumGrams = nonNegativeNumber(nutriments.sodium_100g)
+  return {
+    barcode,
+    name,
+    ...(textValue(data.brands, 160) ? { brand: textValue(data.brands, 160) } : {}),
+    ...(textValue(data.image_front_small_url, 600).startsWith('https://') ? { imageUrl: textValue(data.image_front_small_url, 600) } : {}),
+    ...(volumeFromQuantity(data.quantity) ? { volumeMl: volumeFromQuantity(data.quantity) } : {}),
+    nutritionPer100ml: {
+      ...(nonNegativeNumber(nutriments['energy-kcal_100g']) !== undefined ? { caloriesKcal: nonNegativeNumber(nutriments['energy-kcal_100g']) } : {}),
+      ...(nonNegativeNumber(nutriments.sugars_100g) !== undefined ? { sugarsG: nonNegativeNumber(nutriments.sugars_100g) } : {}),
+      ...(nonNegativeNumber(nutriments.salt_100g) !== undefined ? { saltG: nonNegativeNumber(nutriments.salt_100g) } : {}),
+      ...(sodiumGrams !== undefined ? { sodiumMg: sodiumGrams * 1_000 } : {}),
+      ...(caffeine !== undefined ? { caffeineMg: caffeineUnit === 'g' ? caffeine * 1_000 : caffeine } : {}),
+    },
+  }
+}
+
+async function handleBeverageLookup(request: Request, env: Env) {
+  const cors = corsHeaders(request, env)
+  if (request.method === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : textResponse('Forbidden', 403)
+  if (!cors || request.method !== 'POST') return textResponse('Forbidden', 403)
+  const contentLength = Number(request.headers.get('content-length') ?? '0')
+  if (Number.isFinite(contentLength) && contentLength > MAX_BEVERAGE_LOOKUP_BODY_BYTES) return jsonResponse({ ok: false, error: 'invalid_request' }, 413, cors)
+  let payload: BeverageLookupRequestPayload | null = null
+  try {
+    const value = await request.json() as Partial<BeverageLookupRequestPayload>
+    if (typeof value.initData === 'string' && typeof value.barcode === 'string' && /^\d{8,14}$/.test(value.barcode)) payload = { initData: value.initData, barcode: value.barcode }
+  } catch { /* Validation below */ }
+  const user = payload && await validateInitData(payload.initData, env)
+  if (!payload || !user) return tooManyInvalidRequests(request) ? jsonResponse({ ok: false, error: 'unauthorized' }, 429, cors) : jsonResponse({ ok: false, error: 'unauthorized' }, 401, cors)
+  const record = await readRecord(env, user.id)
+  if (record?.blocked || !await hasBotAccess(env, user.id)) return jsonResponse({ ok: false, error: 'forbidden' }, 403, cors)
+  try {
+    const fields = 'product_name,product_name_ru,generic_name,generic_name_ru,brands,image_front_small_url,quantity,nutriments'
+    const response = await fetch(`https://world.openfoodfacts.org/api/v3/product/${payload.barcode}.json?fields=${encodeURIComponent(fields)}`, {
+      headers: { accept: 'application/json', 'user-agent': 'AquoraWater/1.0 (Telegram Mini App)' },
+    })
+    if (!response.ok) return jsonResponse({ ok: false, error: response.status === 404 ? 'not_found' : 'catalogue_unavailable' }, response.status === 404 ? 404 : 502, cors)
+    const product = productPayload(payload.barcode, await response.json())
+    if (!product) return jsonResponse({ ok: false, error: 'not_found' }, 404, cors)
+    return jsonResponse({ ok: true, product }, 200, cors)
+  } catch (error) {
+    console.error('Beverage lookup failed', error)
+    return jsonResponse({ ok: false, error: 'catalogue_unavailable' }, 502, cors)
+  }
+}
+
 async function handleReminderState(request: Request, env: Env) {
   const cors = corsHeaders(request, env)
   if (request.method === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : textResponse('Forbidden', 403)
@@ -892,6 +973,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
     if (url.pathname === '/api/access') return handleMiniAppAccess(request, env)
+    if (url.pathname === '/api/beverages/barcode') return handleBeverageLookup(request, env)
     if (url.pathname === '/api/reminder-state') return handleReminderState(request, env)
     if (url.pathname === '/api/admin/dashboard') return handleAdminDashboard(request, env)
     if (url.pathname === '/api/admin/users/details') return handleAdminUserDetails(request, env)

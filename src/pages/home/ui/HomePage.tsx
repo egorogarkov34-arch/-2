@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
-import { BellOff, BellRing, Droplets, Flame, History, Minus, PencilLine, Plus, Trophy } from 'lucide-react'
+import { BellOff, BellRing, Droplets, Flame, History, Minus, PencilLine, Plus, ScanLine, Trophy } from 'lucide-react'
 import { useShallow } from 'zustand/shallow'
 import { useHydrationStore, selectTodayAmount } from '@/entities/hydration/model/store'
 import { BodyWater } from '@/entities/hydration/ui/BodyWater'
@@ -10,6 +10,8 @@ import { GoalSheet } from '@/features/goal/ui/GoalSheet'
 import { HistorySheet } from '@/features/history/ui/HistorySheet'
 import { WardrobeSheet } from '@/features/skins/ui/WardrobeSheet'
 import { QuickRemindersSheet } from '@/features/reminders/ui/QuickRemindersSheet'
+import { BeverageScannerSheet } from '@/features/beverage-scanner/ui/BeverageScannerSheet'
+import type { BeverageEntryDetails } from '@/entities/hydration/model/types'
 import { clamp, formatMl, todayKey } from '@/shared/lib/format'
 import { haptic } from '@/shared/lib/telegram'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
@@ -71,12 +73,14 @@ export default function HomePage() {
   const [goalOpen, setGoalOpen] = useState(false)
   const [wardrobeOpen, setWardrobeOpen] = useState(false)
   const [remindersOpen, setRemindersOpen] = useState(false)
+  const [scannerOpen, setScannerOpen] = useState(false)
   const [toast, setToast] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('250')
   const [isEditingCustomAmount, setIsEditingCustomAmount] = useState(false)
-  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake, dayGoals, manualStreak, manualStreakAnchorDateKey, setActiveTab, updateProfile } = useHydrationStore(useShallow((state) => ({
+  const { goal, addWater, addBeverage, removeWater, clearTodayWater, setGoal, profile, intake, dayGoals, manualStreak, manualStreakAnchorDateKey, setActiveTab, updateProfile } = useHydrationStore(useShallow((state) => ({
     goal: state.goal,
     addWater: state.addWater,
+    addBeverage: state.addBeverage,
     removeWater: state.removeWater,
     clearTodayWater: state.clearTodayWater,
     setGoal: state.setGoal,
@@ -123,6 +127,12 @@ export default function HomePage() {
 
   const add = (amount: number) => {
     addWater(amount)
+    setToast(amount)
+    window.setTimeout(() => setToast(null), 2500)
+  }
+
+  const addScannedBeverage = (amount: number, beverage: BeverageEntryDetails) => {
+    addBeverage(amount, beverage)
     setToast(amount)
     window.setTimeout(() => setToast(null), 2500)
   }
@@ -240,6 +250,7 @@ export default function HomePage() {
       <motion.button type="button" className="home-v3-add-water" onClick={() => { haptic.tap(); setSheetOpen(true) }} whileTap={{ scale: .985 }}>
         <span className="home-v3-add-icon"><Plus size={26}/></span><span><b>{t('addWater')}</b><small>{labels.fast}</small></span><Droplets size={22}/>
       </motion.button>
+      <button type="button" className="home-v3-history-button home-v3-scan-button" onClick={() => { haptic.tap(); setScannerOpen(true) }} aria-label={language === 'ru' ? 'Сканировать напиток' : 'Scan drink'}><ScanLine size={21}/></button>
       <button type="button" className="home-v3-history-button" onClick={() => { haptic.tap(); setHistoryOpen(true) }} aria-label={labels.history}><History size={21}/></button>
     </motion.section>
 
@@ -254,6 +265,7 @@ export default function HomePage() {
     </motion.form>
 
     <AddWaterSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onAdd={add}/>
+    <BeverageScannerSheet open={scannerOpen} onClose={() => setScannerOpen(false)} onAdd={addScannedBeverage}/>
     <GoalSheet open={goalOpen} goal={goal} onClose={() => setGoalOpen(false)} onSave={setGoal}/>
     <HistorySheet open={historyOpen} entries={intake} onClose={() => setHistoryOpen(false)} onDelete={remove} onClearAll={clearTodayWater}/>
     <WardrobeSheet open={wardrobeOpen} skin={profile.skin} onClose={() => setWardrobeOpen(false)} onSelect={(skin) => { updateProfile({ skin }); setWardrobeOpen(false) }}/>

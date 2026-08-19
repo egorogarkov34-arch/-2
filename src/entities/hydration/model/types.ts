@@ -13,6 +13,24 @@ export interface IntakeEntry {
   id: string
   amount: number
   createdAt: string
+  beverage?: BeverageEntryDetails
+}
+
+/** Product data saved with a scanned drink. Nutrition values refer to one logged serving. */
+export interface BeverageEntryDetails {
+  productName: string
+  brand?: string
+  barcode?: string
+  imageUrl?: string
+  nutrition: BeverageNutrition
+}
+
+export interface BeverageNutrition {
+  caloriesKcal?: number
+  sugarsG?: number
+  saltG?: number
+  sodiumMg?: number
+  caffeineMg?: number
 }
 
 export interface StoredUserState {
@@ -49,6 +67,7 @@ export interface HydrationState {
   profile: Profile
   setActiveTab: (tab: HydrationState['activeTab']) => void
   addWater: (amount: number) => void
+  addBeverage: (amount: number, beverage: BeverageEntryDetails) => void
   removeWater: (id: string) => void
   clearWater: () => void
   clearTodayWater: () => void
