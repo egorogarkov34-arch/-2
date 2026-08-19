@@ -68,6 +68,8 @@ export default function AdminPage() {
   const [premiumEmojiId, setPremiumEmojiId] = useState('')
   const [selectedUser, setSelectedUser] = useState<UserDetails | null>(null)
   const [loadingUserId, setLoadingUserId] = useState<number | null>(null)
+  const [manualStreakInput, setManualStreakInput] = useState('')
+  const [savingManualStreak, setSavingManualStreak] = useState(false)
   const [showAllUsers, setShowAllUsers] = useState(false)
   const [exportingPdf, setExportingPdf] = useState<'analytics' | 'users' | null>(null)
   const broadcastFileInputRef = useRef<HTMLInputElement>(null)
@@ -84,6 +86,7 @@ export default function AdminPage() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+  useEffect(() => { setManualStreakInput(selectedUser?.manualStreak?.toString() ?? '') }, [selectedUser?.id, selectedUser?.manualStreak])
 
   const updateRole = async (action: 'grant' | 'revoke', id: number) => {
     if (!Number.isSafeInteger(id) || id <= 0) { haptic.error(); return }
@@ -188,6 +191,27 @@ export default function AdminPage() {
       setError(caught instanceof Error ? caught.message : 'request_failed')
       haptic.error()
     } finally { setLoadingUserId(null) }
+  }
+
+  const saveManualStreak = async (manualStreak: number | null) => {
+    if (!selectedUser) return
+    const userId = selectedUser.id
+    setSavingManualStreak(true)
+    try {
+      const result = await requestAdmin<{ ok: true; userId: number; manualStreak: number | null }>('/api/admin/users/streak', { userId, manualStreak })
+      setSelectedUser((current) => current && current.id === userId ? { ...current, manualStreak: result.manualStreak } : current)
+      setManualStreakInput(result.manualStreak?.toString() ?? '')
+      haptic.success()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'request_failed')
+      haptic.error()
+    } finally { setSavingManualStreak(false) }
+  }
+
+  const submitManualStreak = () => {
+    const value = Number(manualStreakInput)
+    if (!Number.isSafeInteger(value) || value < 0 || value > 9_999) { haptic.error(); return }
+    void saveManualStreak(value)
   }
 
   const exportPdf = async (kind: 'analytics' | 'users') => {
@@ -318,6 +342,13 @@ export default function AdminPage() {
             <div><small>Активных дней</small><strong>{number.format(selectedUser.stats.activeDays)}</strong></div><div><small>Дней с целью</small><strong>{number.format(selectedUser.stats.goalDays)}</strong></div>
             <div><small>Личный рекорд</small><strong>{formatMl(selectedUser.stats.bestAmount)}</strong><span>{selectedUser.stats.bestDateKey ? historyDate(selectedUser.stats.bestDateKey) : '—'}</span></div><div><small>Последняя запись</small><strong>{selectedUser.stats.lastActiveDateKey ? historyDate(selectedUser.stats.lastActiveDateKey) : '—'}</strong></div>
           </div>
+          {isOwner && <section className="admin-detail-section admin-streak-editor">
+            <div className="admin-streak-editor-heading"><div><h3>Серия</h3><p>{selectedUser.manualStreak === null ? 'Считается автоматически по выполненным целям.' : 'Значение установлено вручную владельцем.'}</p></div><button type="button" onClick={() => void saveManualStreak(null)} disabled={savingManualStreak || selectedUser.manualStreak === null}>Автоматически</button></div>
+            <form className="admin-streak-form" onSubmit={(event) => { event.preventDefault(); submitManualStreak() }}>
+              <label><span>Дней подряд</span><input value={manualStreakInput} onChange={(event) => setManualStreakInput(event.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" maxLength={4} placeholder="Например, 7" aria-label="Серия в днях" /></label>
+              <button type="submit" disabled={savingManualStreak || !manualStreakInput}>{savingManualStreak ? 'Сохраняем…' : 'Сохранить'}</button>
+            </form>
+          </section>}
           <section className="admin-detail-section"><h3>Личные данные</h3>{selectedUser.profile ? <div className="admin-detail-list"><p><span>Возраст</span><strong>{selectedUser.profile.age} лет</strong></p><p><span>Пол</span><strong>{genderLabel[selectedUser.profile.gender]}</strong></p><p><span>Рост</span><strong>{selectedUser.profile.height} см</strong></p><p><span>Вес</span><strong>{selectedUser.profile.weight} кг</strong></p><p><span>Активность</span><strong>{activityLabel[selectedUser.profile.activity]}</strong></p></div> : <p className="admin-detail-empty">Пользователь пока не заполнял личные данные в Mini App.</p>}</section>
           <section className="admin-detail-section"><h3>Последние дни</h3><div className="admin-detail-list">{selectedUser.stats.dailyHistory.length === 0 ? <p className="admin-detail-empty">Записей воды пока нет.</p> : selectedUser.stats.dailyHistory.slice(-7).reverse().map((point) => <p key={point.dateKey}><span>{historyDate(point.dateKey)}</span><strong>{formatMl(point.amount)} / {formatMl(point.goal)}</strong></p>)}</div></section>
         </motion.section>

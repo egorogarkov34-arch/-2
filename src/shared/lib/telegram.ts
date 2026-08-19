@@ -80,10 +80,12 @@ export const checkAppAccess = async (): Promise<AppAccessState> => {
 }
 
 /** Mirrors only the data required for a bot reminder. The Worker validates initData before accepting it. */
-export const syncReminderState = ({ profile, goal, intake, dayGoals }: ReminderSyncState) => {
+export type ManualStreakSyncValue = number | null | undefined
+
+export const syncReminderState = async ({ profile, goal, intake, dayGoals }: ReminderSyncState): Promise<ManualStreakSyncValue> => {
   const apiUrl = botApiUrl()
   const initData = getTelegramInitData()
-  if (!apiUrl || !initData) return
+  if (!apiUrl || !initData) return undefined
 
   const dateKey = todayKey()
   const todayAmount = intake
@@ -103,25 +105,34 @@ export const syncReminderState = ({ profile, goal, intake, dayGoals }: ReminderS
     .map(([historyDateKey, amount]) => ({ dateKey: historyDateKey, amount: Math.round(amount), goal: Math.round(dayGoals[historyDateKey] ?? goal) }))
     .sort((left, right) => left.dateKey.localeCompare(right.dateKey))
 
-  void fetch(`${apiUrl}/api/reminder-state`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      initData,
-      dateKey,
-      goal,
-      todayAmount,
-      dailyHistory,
-      language: profile.language,
-      reminders: profile.reminders,
-      profile: {
-        name: profile.name,
-        age: profile.age,
-        gender: profile.gender,
-        height: profile.height,
-        weight: profile.weight,
-        activity: profile.activity,
-      },
-    }),
-  }).catch(() => undefined)
+  try {
+    const response = await fetch(`${apiUrl}/api/reminder-state`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        initData,
+        dateKey,
+        goal,
+        todayAmount,
+        dailyHistory,
+        language: profile.language,
+        reminders: profile.reminders,
+        profile: {
+          name: profile.name,
+          age: profile.age,
+          gender: profile.gender,
+          height: profile.height,
+          weight: profile.weight,
+          activity: profile.activity,
+        },
+      }),
+    })
+    const payload: unknown = await response.json().catch(() => null)
+    if (!response.ok || !payload || typeof payload !== 'object' || !('manualStreak' in payload)) return undefined
+    const manualStreak = payload.manualStreak
+    if (manualStreak === null) return null
+    return typeof manualStreak === 'number' && Number.isSafeInteger(manualStreak) && manualStreak >= 0 && manualStreak <= 9_999
+      ? manualStreak
+      : undefined
+  } catch { return undefined }
 }

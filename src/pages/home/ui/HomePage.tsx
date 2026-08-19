@@ -55,7 +55,7 @@ export default function HomePage() {
   const [toast, setToast] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('250')
   const [isEditingCustomAmount, setIsEditingCustomAmount] = useState(false)
-  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake, dayGoals, setActiveTab, updateProfile } = useHydrationStore(useShallow((state) => ({
+  const { goal, addWater, removeWater, clearTodayWater, setGoal, profile, intake, dayGoals, manualStreak, setActiveTab, updateProfile } = useHydrationStore(useShallow((state) => ({
     goal: state.goal,
     addWater: state.addWater,
     removeWater: state.removeWater,
@@ -64,6 +64,7 @@ export default function HomePage() {
     profile: state.profile,
     intake: state.intake,
     dayGoals: state.dayGoals,
+    manualStreak: state.manualStreak,
     setActiveTab: state.setActiveTab,
     updateProfile: state.updateProfile,
   })))
@@ -93,7 +94,8 @@ export default function HomePage() {
     { date: todayKey(), amount: 0 },
   ), [dailyTotals])
 
-  const streak = useMemo(() => calculateStreak(dailyTotals, dayGoals, goal), [dailyTotals, dayGoals, goal])
+  const calculatedStreak = useMemo(() => calculateStreak(dailyTotals, dayGoals, goal), [dailyTotals, dayGoals, goal])
+  const streak = manualStreak ?? calculatedStreak
   const bestDate = useMemo(() => {
     if (bestDay.amount === 0) return language === 'en' ? 'No entries yet' : 'Пока нет записей'
     return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(new Date(`${bestDay.date}T12:00:00`))

@@ -34,6 +34,7 @@ export interface DailyHydrationPoint {
 }
 
 export interface UserDetails extends DashboardUser {
+  manualStreak: number | null
   profile: UserProfileSnapshot | null
   reminders: { enabled: boolean; intervalMinutes: number; timeZone: string } | null
   stats: {

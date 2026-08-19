@@ -20,6 +20,8 @@ export interface StoredUserState {
   goal: number
   goalMode: 'auto' | 'custom'
   dayGoals?: Record<string, number>
+  /** A value set by the bot owner. Null keeps the regular automatic calculation. */
+  manualStreak?: number | null
 }
 
 export interface Profile {
@@ -41,6 +43,7 @@ export interface HydrationState {
   goalMode: 'auto' | 'custom'
   intake: IntakeEntry[]
   dayGoals: Record<string, number>
+  manualStreak: number | null
   profile: Profile
   setActiveTab: (tab: HydrationState['activeTab']) => void
   addWater: (amount: number) => void
@@ -49,6 +52,7 @@ export interface HydrationState {
   clearTodayWater: () => void
   setGoal: (goal: number) => void
   setAutomaticGoal: (goal: number) => void
+  setManualStreak: (value: number | null) => void
   updateProfile: (profile: Partial<Profile>) => void
   restoreUserState: (state: Partial<StoredUserState>) => void
 }

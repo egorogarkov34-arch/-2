@@ -192,6 +192,7 @@ export default function StatisticsPage() {
   const intake = useHydrationStore((state) => state.intake)
   const goal = useHydrationStore((state) => state.goal)
   const dayGoals = useHydrationStore((state) => state.dayGoals)
+  const manualStreak = useHydrationStore((state) => state.manualStreak)
   const setGoal = useHydrationStore((state) => state.setGoal)
   const { language } = useTranslation()
   const locale = language === 'ru' ? 'ru-RU' : 'en-US'
@@ -266,7 +267,7 @@ export default function StatisticsPage() {
     }
   }, [dayGoals, goal, intake, language, locale, period, selectedMonth, selectedYear])
 
-  const streak = calculateStreak(buildAmounts(intake), dayGoals, goal, now)
+  const streak = manualStreak ?? calculateStreak(buildAmounts(intake), dayGoals, goal, now)
   const periodTitle = language === 'ru' ? (period === 'week' ? 'Неделя' : period === 'month' ? 'Месяц' : 'Год') : (period === 'week' ? 'Week' : period === 'month' ? 'Month' : 'Year')
   const historyTitle = language === 'ru' ? (period === 'year' ? `Месяцы ${selectedYear} года` : `История за ${period === 'week' ? 'неделю' : 'месяц'}`) : (period === 'year' ? `${selectedYear} months` : `${periodTitle} history`)
   const maxAmount = Math.max(statistics.dailyGoal, ...statistics.data.map((entry) => entry.amount), 1000)

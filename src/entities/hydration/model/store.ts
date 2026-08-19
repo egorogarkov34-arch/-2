@@ -44,11 +44,14 @@ const mergeProfile = (...profiles: Array<Partial<Profile> | undefined>): Profile
   }
 }
 
-const syncUserState = (state: Pick<HydrationState, 'profile' | 'goal' | 'goalMode' | 'dayGoals'>) =>
-  syncToCloud(cloudUserStateKey, { profile: state.profile, goal: state.goal, goalMode: state.goalMode, dayGoals: state.dayGoals } satisfies StoredUserState)
+const syncUserState = (state: Pick<HydrationState, 'profile' | 'goal' | 'goalMode' | 'dayGoals' | 'manualStreak'>) =>
+  syncToCloud(cloudUserStateKey, { profile: state.profile, goal: state.goal, goalMode: state.goalMode, dayGoals: state.dayGoals, manualStreak: state.manualStreak } satisfies StoredUserState)
 
 const syncReminderSnapshot = (state: Pick<HydrationState, 'profile' | 'goal' | 'intake' | 'dayGoals'>) =>
-  syncReminderState({ profile: state.profile, goal: state.goal, intake: state.intake, dayGoals: state.dayGoals })
+  void syncReminderState({ profile: state.profile, goal: state.goal, intake: state.intake, dayGoals: state.dayGoals }).then((manualStreak) => {
+    if (manualStreak === undefined || useHydrationStore.getState().manualStreak === manualStreak) return
+    useHydrationStore.getState().setManualStreak(manualStreak)
+  })
 
 function changesHydrationNeed(profile: Partial<HydrationState['profile']>) {
   return hydrationProfileFields.some((field) => field in profile)
@@ -62,6 +65,7 @@ export const useHydrationStore = create<HydrationState>()(
       goalMode: 'auto',
       intake: [],
       dayGoals: {},
+      manualStreak: null,
       profile: initialProfile,
       setActiveTab: (activeTab) => set({ activeTab }),
       addWater: (amount) =>
@@ -110,6 +114,12 @@ export const useHydrationStore = create<HydrationState>()(
           syncReminderSnapshot({ ...state, ...next })
           return next
         }),
+      setManualStreak: (manualStreak) =>
+        set((state) => {
+          const next = { manualStreak }
+          syncUserState({ ...state, ...next })
+          return next
+        }),
       updateProfile: (profile) =>
         set((state) => {
           const nextProfile = { ...state.profile, ...profile, reminders: { ...state.profile.reminders, ...profile.reminders } }
@@ -126,7 +136,10 @@ export const useHydrationStore = create<HydrationState>()(
           const profile = mergeProfile(state.profile, stored.profile)
           const goalMode = stored.goalMode === 'custom' ? 'custom' : 'auto'
           const storedGoal = typeof stored.goal === 'number' && stored.goal >= 500 && stored.goal <= 10_000 ? stored.goal : state.goal
-          return { profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode, dayGoals: { ...state.dayGoals, ...stored.dayGoals } }
+          const manualStreak = stored.manualStreak === null || (typeof stored.manualStreak === 'number' && Number.isSafeInteger(stored.manualStreak) && stored.manualStreak >= 0 && stored.manualStreak <= 9_999)
+            ? stored.manualStreak
+            : state.manualStreak
+          return { profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode, dayGoals: { ...state.dayGoals, ...stored.dayGoals }, manualStreak }
         }),
     }),
     {
@@ -136,7 +149,10 @@ export const useHydrationStore = create<HydrationState>()(
         const profile = mergeProfile(persisted.profile)
         const goalMode = persisted.goalMode === 'custom' ? 'custom' : 'auto'
         const storedGoal = typeof persisted.goal === 'number' && persisted.goal >= 500 && persisted.goal <= 10_000 ? persisted.goal : currentState.goal
-        return { ...currentState, ...persisted, profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode, dayGoals: { ...currentState.dayGoals, ...persisted.dayGoals } }
+        const manualStreak = persisted.manualStreak === null || (typeof persisted.manualStreak === 'number' && Number.isSafeInteger(persisted.manualStreak) && persisted.manualStreak >= 0 && persisted.manualStreak <= 9_999)
+          ? persisted.manualStreak
+          : currentState.manualStreak
+        return { ...currentState, ...persisted, profile, goal: goalMode === 'auto' ? calculateWaterGoal(profile) : storedGoal, goalMode, dayGoals: { ...currentState.dayGoals, ...persisted.dayGoals }, manualStreak }
       },
     },
   ),

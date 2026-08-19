@@ -54,6 +54,7 @@ interface ReminderRecord {
   blocked?: boolean
   blockedAt?: number
   blockedBy?: number
+  manualStreak?: number | null
   profile?: ProfileSnapshot
   telegramName?: string
   createdAt?: number
@@ -109,6 +110,10 @@ interface AdminUserAccessRequestPayload extends AdminRequestPayload {
   userId: number
 }
 interface AdminUserDetailsRequestPayload extends AdminRequestPayload { userId: number }
+interface AdminUserStreakRequestPayload extends AdminRequestPayload {
+  userId: number
+  manualStreak: number | null
+}
 interface AdminAccessModeRequestPayload extends AdminRequestPayload {
   mode: AccessMode
 }
@@ -434,6 +439,13 @@ function isAdminUserDetailsRequest(value: unknown): value is AdminUserDetailsReq
   return Number.isSafeInteger(request.userId) && Number(request.userId) > 0
 }
 
+function isAdminUserStreakRequest(value: unknown): value is AdminUserStreakRequestPayload {
+  if (!isAdminRequest(value)) return false
+  const request = value as Partial<AdminUserStreakRequestPayload>
+  return Number.isSafeInteger(request.userId) && Number(request.userId) > 0
+    && (request.manualStreak === null || (typeof request.manualStreak === 'number' && Number.isSafeInteger(request.manualStreak) && request.manualStreak >= 0 && request.manualStreak <= 9_999))
+}
+
 function isAdminAccessModeRequest(value: unknown): value is AdminAccessModeRequestPayload {
   return isAdminRequest(value) && ((value as Partial<AdminAccessModeRequestPayload>).mode === 'open' || (value as Partial<AdminAccessModeRequestPayload>).mode === 'private')
 }
@@ -661,11 +673,28 @@ async function handleAdminUserDetails(request: Request, env: Env) {
     ok: true,
     user: {
       ...userDashboardItem(record),
+      manualStreak: record.manualStreak ?? null,
       profile: record.profile ?? null,
       reminders: record.reminders ? { enabled: record.reminders.enabled, intervalMinutes: record.reminders.intervalMinutes, timeZone: record.reminders.timeZone } : null,
       stats: recordAnalytics(record),
     },
   }, 200, cors)
+}
+
+async function handleAdminUserStreak(request: Request, env: Env) {
+  const cors = corsHeaders(request, env)
+  if (request.method === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : textResponse('Forbidden', 403)
+  if (!cors || request.method !== 'POST') return textResponse('Forbidden', 403)
+  const auth = await authenticatedAdmin(request, env, cors)
+  if ('response' in auth) return auth.response
+  if (auth.role !== 'owner') return jsonResponse({ ok: false, error: 'owner_required' }, 403, cors)
+  if (!isAdminUserStreakRequest(auth.body)) return jsonResponse({ ok: false, error: 'invalid_request' }, 400, cors)
+  if (!env.AQUORA_USERS) return jsonResponse({ ok: false, error: 'storage_not_configured' }, 503, cors)
+  const record = await readRecord(env, auth.body.userId)
+  if (!record) return jsonResponse({ ok: false, error: 'user_not_found' }, 404, cors)
+  const next: ReminderRecord = { ...record, manualStreak: auth.body.manualStreak, updatedAt: Date.now() }
+  if (!await writeRecord(env, next)) return jsonResponse({ ok: false, error: 'storage_unavailable' }, 503, cors)
+  return jsonResponse({ ok: true, userId: record.userId, manualStreak: next.manualStreak }, 200, cors)
 }
 
 async function handleAdminRoles(request: Request, env: Env) {
@@ -817,9 +846,9 @@ async function handleReminderState(request: Request, env: Env) {
   const existing = await readRecord(env, user.id)
   if (existing?.blocked) return jsonResponse({ ok: false, error: 'user_blocked' }, 403, cors)
   if (!await hasBotAccess(env, user.id)) return jsonResponse({ ok: false, error: 'access_closed' }, 403, cors)
-  const record: ReminderRecord = { userId: user.id, chatId: existing?.chatId ?? user.id, goal: payload.goal, todayAmount: payload.todayAmount, dateKey: payload.dateKey, language: payload.language, reminders: payload.reminders, profile: payload.profile ?? existing?.profile, telegramName: telegramDisplayName(user) || existing?.telegramName, createdAt: existing?.createdAt ?? Date.now(), dailyHistory: mergeDailyHistory(existing?.dailyHistory, payload.dailyHistory, payload.dateKey, payload.todayAmount, payload.goal), reminderIndex: existing?.reminderIndex ?? 0, lastReminderAt: existing?.lastReminderAt, lastReminderDateKey: existing?.lastReminderDateKey, completedDateKey: existing?.completedDateKey, deliveryBlocked: false, blocked: false, updatedAt: Date.now() }
+  const record: ReminderRecord = { userId: user.id, chatId: existing?.chatId ?? user.id, goal: payload.goal, todayAmount: payload.todayAmount, dateKey: payload.dateKey, language: payload.language, reminders: payload.reminders, profile: payload.profile ?? existing?.profile, telegramName: telegramDisplayName(user) || existing?.telegramName, createdAt: existing?.createdAt ?? Date.now(), dailyHistory: mergeDailyHistory(existing?.dailyHistory, payload.dailyHistory, payload.dateKey, payload.todayAmount, payload.goal), reminderIndex: existing?.reminderIndex ?? 0, lastReminderAt: existing?.lastReminderAt, lastReminderDateKey: existing?.lastReminderDateKey, completedDateKey: existing?.completedDateKey, deliveryBlocked: false, blocked: false, manualStreak: existing?.manualStreak ?? null, updatedAt: Date.now() }
   if (!await writeRecord(env, record)) return jsonResponse({ ok: false, error: 'storage_unavailable' }, 503, cors)
-  return jsonResponse({ ok: true }, 200, cors)
+  return jsonResponse({ ok: true, manualStreak: record.manualStreak }, 200, cors)
 }
 
 function reminderText(record: ReminderRecord, amount: number) {
@@ -865,6 +894,7 @@ export default {
     if (url.pathname === '/api/reminder-state') return handleReminderState(request, env)
     if (url.pathname === '/api/admin/dashboard') return handleAdminDashboard(request, env)
     if (url.pathname === '/api/admin/users/details') return handleAdminUserDetails(request, env)
+    if (url.pathname === '/api/admin/users/streak') return handleAdminUserStreak(request, env)
     if (url.pathname === '/api/admin/roles') return handleAdminRoles(request, env)
     if (url.pathname === '/api/admin/users/access') return handleAdminUserAccess(request, env)
     if (url.pathname === '/api/admin/access/mode') return handleAdminAccessMode(request, env)
