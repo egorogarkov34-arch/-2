@@ -13,16 +13,6 @@ interface Props {
 
 type ScannerStep = 'start' | 'camera' | 'loading' | 'review' | 'not-found' | 'error'
 
-interface BarcodeDetectorInstance {
-  detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>>
-}
-
-interface BarcodeDetectorConstructor {
-  new (options?: { formats?: string[] }): BarcodeDetectorInstance
-}
-
-const readDetector = () => (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector
-
 const initialBarcode = ''
 
 export function BeverageScannerSheet({ open, onClose, onAdd }: Props) {
@@ -72,40 +62,35 @@ export function BeverageScannerSheet({ open, onClose, onAdd }: Props) {
 
   useEffect(() => {
     if (!open || step !== 'camera') return
-    const Detector = readDetector()
     const video = videoRef.current
-    if (!Detector || !video || !navigator.mediaDevices?.getUserMedia) {
-      setCameraError(copy.unsupported)
+    if (!video || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError(copy.cameraPermission)
       setStep('error')
       return
     }
-    let stream: MediaStream | undefined
-    let frame = 0
+    let controls: { stop: () => void } | undefined
     let cancelled = false
     const stop = () => {
-      if (frame) window.cancelAnimationFrame(frame)
-      stream?.getTracks().forEach((track) => track.stop())
+      controls?.stop()
     }
     const start = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
-        if (cancelled) { stop(); return }
-        video.srcObject = stream
-        await video.play()
-        const detector = new Detector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] })
-        const scanFrame = async () => {
-          if (cancelled) return
-          try {
-            if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-              const codes = await detector.detect(video)
-              const code = codes[0]?.rawValue?.replace(/\D/g, '')
-              if (code) { stop(); void findProduct(code); return }
-            }
-          } catch { /* A skipped frame is expected while the camera focuses. */ }
-          frame = window.requestAnimationFrame(() => { void scanFrame() })
-        }
-        void scanFrame()
+        const { BrowserMultiFormatReader } = await import('@zxing/browser')
+        if (cancelled) return
+        const reader = new BrowserMultiFormatReader()
+        controls = await reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: 'environment' } }, audio: false },
+          video,
+          (result) => {
+            const code = result?.getText().replace(/\D/g, '')
+            if (!code || cancelled) return
+            cancelled = true
+            stop()
+            void findProduct(code)
+          },
+        )
       } catch {
+        if (cancelled) return
         setCameraError(copy.cameraPermission)
         setStep('error')
       }
