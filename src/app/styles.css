@@ -233,6 +233,10 @@ h2 { font-size: 17px; letter-spacing: -.025em; margin: 0; }
 .home-v3-metrics { align-content: start; padding-top: 4px; }.home-v3-progress-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 0; }.home-v3-progress-actions button { width: 40px; min-height: 40px; height: 40px; justify-self: center; padding: 0; }.home-v3-progress-actions i { width: 40px; height: 40px; }.home-v3-progress-actions button:active { border-color: transparent; background: transparent; }
 @media (max-width: 365px) { .home-v3-progress-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }.home-v3-progress-actions button { width: 32px; min-height: 32px; height: 32px; padding: 0; }.home-v3-progress-actions i { width: 32px; height: 32px; border-radius: 10px; }.home-v3-progress-actions i svg { width: 16px; height: 16px; } }
 
+/* Scanner controls */
+.beverage-camera-overlay { pointer-events: none; }
+.beverage-camera-torch { position: absolute; right: 12px; bottom: 12px; width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid #85ccff5c; border-radius: 15px; color: #dff3ff; background: #0b1722d9; box-shadow: 0 6px 20px #0000004d; transition: background .18s ease, color .18s ease, transform .18s ease; }.beverage-camera-torch.is-active { color: #fff4cf; background: #84641db8; }.beverage-camera-torch:active { transform: scale(.93); }.beverage-scanner-added { color: #91d4ff; }.beverage-scanner-added b { color: #edf8ff; font-size: 18px; }
+
 /* Admin access mode */
 .admin-access-card { overflow: hidden; border: 1px solid #FFFFFF09; border-radius: 20px; background: #141618; }
 .admin-access-mode { min-height: 94px; padding: 14px 12px; display: flex; align-items: center; gap: 12px; }

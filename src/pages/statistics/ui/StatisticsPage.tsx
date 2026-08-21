@@ -246,14 +246,6 @@ export default function StatisticsPage() {
     const maxDay = visibleDays.reduce<DayTotal | null>((best, day) => !best || day.amount > best.amount ? day : best, null)
     const goalDays = visibleDays.filter((day) => day.amount >= day.goal && day.goal > 0).length
     const goalDaysTarget = period === 'year' ? allDays.length : visibleDays.length
-    const nutrition = entries.reduce((totals, entry) => ({
-      caloriesKcal: totals.caloriesKcal + (entry.beverage?.nutrition.caloriesKcal ?? 0),
-      sugarsG: totals.sugarsG + (entry.beverage?.nutrition.sugarsG ?? 0),
-      saltG: totals.saltG + (entry.beverage?.nutrition.saltG ?? 0),
-      sodiumMg: totals.sodiumMg + (entry.beverage?.nutrition.sodiumMg ?? 0),
-      caffeineMg: totals.caffeineMg + (entry.beverage?.nutrition.caffeineMg ?? 0),
-      scannedDrinks: totals.scannedDrinks + (entry.beverage ? 1 : 0),
-    }), { caloriesKcal: 0, sugarsG: 0, saltG: 0, sodiumMg: 0, caffeineMg: 0, scannedDrinks: 0 })
     const history: HistoryItem[] = period === 'year'
       ? Array.from({ length: 12 }, (_, month) => {
           const start = new Date(selectedYear, month, 1)
@@ -292,7 +284,6 @@ export default function StatisticsPage() {
       entries,
       distribution: getDistribution(entries, language),
       timePoints: makeTimePoints(entries, visibleDays.length),
-      nutrition,
     }
   }, [dayGoals, goal, intake, language, locale, period, selectedMonth, selectedYear])
 
@@ -372,16 +363,6 @@ export default function StatisticsPage() {
       <Metric icon={Trophy} label={language === 'ru' ? 'Лучший день' : 'Best day'} value={statistics.maxDay ? volume(statistics.maxDay.amount, locale, language) : volume(0, locale, language)} caption={statistics.maxDay?.amount ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(statistics.maxDay.date) : (language === 'ru' ? 'Пока нет записей' : 'No entries yet')} tone="gold"/>
     </section>
 
-    <section className="stats-v2-nutrition-card" aria-label={language === 'ru' ? 'Состав напитков' : 'Drink nutrition'}>
-      <div><p>{language === 'ru' ? 'Напитки и состав' : 'Drinks & nutrition'}</p><span>{statistics.nutrition.scannedDrinks ? (language === 'ru' ? `По ${statistics.nutrition.scannedDrinks} сканированным ${statistics.nutrition.scannedDrinks === 1 ? 'напитку' : 'напиткам'}` : `From ${statistics.nutrition.scannedDrinks} scanned drink${statistics.nutrition.scannedDrinks === 1 ? '' : 's'}`) : (language === 'ru' ? 'Сканируйте бутылку камерой, чтобы видеть состав.' : 'Scan a bottle to see its nutrition.')}</span></div>
-      <div className="stats-v2-nutrition-values">
-        <NutritionValue label={language === 'ru' ? 'Калории' : 'Calories'} value={`${Math.round(statistics.nutrition.caloriesKcal)} ${language === 'ru' ? 'ккал' : 'kcal'}`}/>
-        <NutritionValue label={language === 'ru' ? 'Сахар' : 'Sugar'} value={`${statistics.nutrition.sugarsG.toLocaleString(locale, { maximumFractionDigits: 1 })} g`}/>
-        <NutritionValue label={language === 'ru' ? 'Соль' : 'Salt'} value={`${statistics.nutrition.saltG.toLocaleString(locale, { maximumFractionDigits: 1 })} g`}/>
-        <NutritionValue label={language === 'ru' ? 'Кофеин' : 'Caffeine'} value={`${Math.round(statistics.nutrition.caffeineMg)} mg`}/>
-      </div>
-    </section>
-
     <section className="stats-v2-secondary-grid">
       <article className="stats-v2-small-card distribution-card"><div className="stats-v2-card-title"><span>{language === 'ru' ? 'Распределение' : 'Distribution'}</span><button type="button" className="stats-v2-card-action" onClick={() => { haptic.tap(); setDistributionOpen(true) }} aria-label={language === 'ru' ? 'Открыть распределение воды' : 'Open water distribution'}><ChevronRight size={16}/></button></div><div className="distribution-content"><div className="distribution-donut" style={{ background: donutBackground(statistics.distribution.map((item) => item.percent)) }}><i/></div><div className="distribution-legend">{statistics.distribution.map((item, index) => <div key={item.label}><i className={`dot-${index}`}/><span>{item.label}</span><b>{item.percent}%</b></div>)}</div></div></article>
       <article className="stats-v2-small-card time-card"><div className="stats-v2-card-title"><span>{language === 'ru' ? 'Среднее по времени' : 'Average by time'}</span></div><div className="stats-v2-time-chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={statistics.timePoints} margin={{ top: 8, right: 2, bottom: -4, left: -26 }}><CartesianGrid vertical={false} stroke="#FFFFFF09"/><YAxis width={29} tickFormatter={(value: number) => volume(value, locale, language)} axisLine={false} tickLine={false} tick={{ fill: '#77818b', fontSize: 8 }}/><XAxis dataKey="label" interval={1} axisLine={false} tickLine={false} tick={{ fill: '#7c858e', fontSize: 8 }}/><Tooltip content={<WaterTooltip format={(value) => volume(value, locale, language)}/>}/><Line type="monotone" dataKey="amount" stroke="#55AEFF" strokeWidth={2.4} dot={false} activeDot={{ r: 4, fill: '#0e1012', stroke: '#72baff', strokeWidth: 2 }}/></LineChart></ResponsiveContainer></div></article>
@@ -416,10 +397,6 @@ export default function StatisticsPage() {
 
 function Metric({ icon: Icon, label, value, caption, tone }: { icon: typeof Droplets; label: string; value: string; caption?: string; tone: 'blue' | 'cyan' | 'orange' | 'gold' }) {
   return <article className="stats-v2-metric"><span className={`stats-v2-metric-icon ${tone}`}><Icon size={18}/></span><p>{label}</p><strong>{value}</strong>{caption && <small>{caption}</small>}</article>
-}
-
-function NutritionValue({ label, value }: { label: string; value: string }) {
-  return <div><span>{label}</span><b>{value}</b></div>
 }
 
 function WaterTooltip({ active, payload, format }: { active?: boolean; payload?: readonly { value?: number | string | readonly (number | string)[] }[]; format: (value: number) => string }) {

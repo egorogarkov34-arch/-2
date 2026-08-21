@@ -61,23 +61,13 @@ const botApiUrl = () => {
   return (configuredUrl || 'https://aquora-water-bot.egorogarkov34.workers.dev').replace(/\/+$/, '')
 }
 
-export interface BarcodeBeverageProduct {
+export interface BarcodeWaterAmount {
   barcode: string
-  name: string
-  brand?: string
-  imageUrl?: string
-  volumeMl?: number
-  nutritionPer100ml: {
-    caloriesKcal?: number
-    sugarsG?: number
-    saltG?: number
-    sodiumMg?: number
-    caffeineMg?: number
-  }
+  volumeMl: number
 }
 
 export type BarcodeLookupResult =
-  | { ok: true; product: BarcodeBeverageProduct }
+  | { ok: true; product: BarcodeWaterAmount }
   | { ok: false; reason: 'not_found' | 'unavailable' | 'unauthorized' }
 
 /** Looks up a barcode through the Worker, so catalogue credentials and requests stay off the client. */
@@ -96,9 +86,9 @@ export const lookupBeverageBarcode = async (barcode: string): Promise<BarcodeLoo
     if (!response.ok || !payload || typeof payload !== 'object' || !('product' in payload)) return { ok: false, reason: 'unavailable' }
     const product = payload.product
     if (!product || typeof product !== 'object') return { ok: false, reason: 'unavailable' }
-    const candidate = product as Partial<BarcodeBeverageProduct>
-    if (typeof candidate.barcode !== 'string' || typeof candidate.name !== 'string' || !candidate.nutritionPer100ml || typeof candidate.nutritionPer100ml !== 'object') return { ok: false, reason: 'unavailable' }
-    return { ok: true, product: candidate as BarcodeBeverageProduct }
+    const candidate = product as Partial<BarcodeWaterAmount>
+    if (typeof candidate.barcode !== 'string' || typeof candidate.volumeMl !== 'number' || !Number.isFinite(candidate.volumeMl) || candidate.volumeMl < 1 || candidate.volumeMl > 5_000) return { ok: false, reason: 'unavailable' }
+    return { ok: true, product: candidate as BarcodeWaterAmount }
   } catch {
     return { ok: false, reason: 'unavailable' }
   }

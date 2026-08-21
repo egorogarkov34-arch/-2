@@ -842,11 +842,6 @@ function textValue(value: unknown, maxLength = 500) {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 }
 
-function nonNegativeNumber(value: unknown) {
-  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value.replace(',', '.')) : Number.NaN
-  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100_000 ? parsed : undefined
-}
-
 function volumeFromQuantity(value: unknown) {
   const quantity = textValue(value, 80).replace(',', '.')
   const match = /([0-9]+(?:\.[0-9]+)?)\s*(ml|мл|l|л)\b/i.exec(quantity)
@@ -857,30 +852,16 @@ function volumeFromQuantity(value: unknown) {
   return Math.round(millilitres) > 0 && Math.round(millilitres) <= 5_000 ? Math.round(millilitres) : undefined
 }
 
-function productPayload(barcode: string, payload: unknown) {
+function barcodeWaterPayload(barcode: string, payload: unknown) {
   if (!payload || typeof payload !== 'object') return null
   const product = (payload as { product?: unknown }).product
   if (!product || typeof product !== 'object') return null
   const data = product as Record<string, unknown>
-  const nutriments = data.nutriments && typeof data.nutriments === 'object' ? data.nutriments as Record<string, unknown> : {}
-  const name = textValue(data.product_name_ru) || textValue(data.product_name) || textValue(data.generic_name_ru) || textValue(data.generic_name)
-  if (!name) return null
-  const caffeine = nonNegativeNumber(nutriments.caffeine_100g)
-  const caffeineUnit = textValue(nutriments.caffeine_unit, 12).toLowerCase()
-  const sodiumGrams = nonNegativeNumber(nutriments.sodium_100g)
+  const volumeMl = volumeFromQuantity(data.quantity)
+  if (volumeMl === undefined) return null
   return {
     barcode,
-    name,
-    ...(textValue(data.brands, 160) ? { brand: textValue(data.brands, 160) } : {}),
-    ...(textValue(data.image_front_small_url, 600).startsWith('https://') ? { imageUrl: textValue(data.image_front_small_url, 600) } : {}),
-    ...(volumeFromQuantity(data.quantity) ? { volumeMl: volumeFromQuantity(data.quantity) } : {}),
-    nutritionPer100ml: {
-      ...(nonNegativeNumber(nutriments['energy-kcal_100g']) !== undefined ? { caloriesKcal: nonNegativeNumber(nutriments['energy-kcal_100g']) } : {}),
-      ...(nonNegativeNumber(nutriments.sugars_100g) !== undefined ? { sugarsG: nonNegativeNumber(nutriments.sugars_100g) } : {}),
-      ...(nonNegativeNumber(nutriments.salt_100g) !== undefined ? { saltG: nonNegativeNumber(nutriments.salt_100g) } : {}),
-      ...(sodiumGrams !== undefined ? { sodiumMg: sodiumGrams * 1_000 } : {}),
-      ...(caffeine !== undefined ? { caffeineMg: caffeineUnit === 'g' ? caffeine * 1_000 : caffeine } : {}),
-    },
+    volumeMl,
   }
 }
 
@@ -900,12 +881,12 @@ async function handleBeverageLookup(request: Request, env: Env) {
   const record = await readRecord(env, user.id)
   if (record?.blocked || !await hasBotAccess(env, user.id)) return jsonResponse({ ok: false, error: 'forbidden' }, 403, cors)
   try {
-    const fields = 'product_name,product_name_ru,generic_name,generic_name_ru,brands,image_front_small_url,quantity,nutriments'
+    const fields = 'quantity'
     const response = await fetch(`https://world.openfoodfacts.org/api/v3/product/${payload.barcode}.json?fields=${encodeURIComponent(fields)}`, {
       headers: { accept: 'application/json', 'user-agent': 'AquoraWater/1.0 (Telegram Mini App)' },
     })
     if (!response.ok) return jsonResponse({ ok: false, error: response.status === 404 ? 'not_found' : 'catalogue_unavailable' }, response.status === 404 ? 404 : 502, cors)
-    const product = productPayload(payload.barcode, await response.json())
+    const product = barcodeWaterPayload(payload.barcode, await response.json())
     if (!product) return jsonResponse({ ok: false, error: 'not_found' }, 404, cors)
     return jsonResponse({ ok: true, product }, 200, cors)
   } catch (error) {

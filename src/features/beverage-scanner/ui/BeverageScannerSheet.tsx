@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Camera, Check, LoaderCircle, ScanLine, Search, X } from 'lucide-react'
-import type { BeverageEntryDetails } from '@/entities/hydration/model/types'
-import { haptic, lookupBeverageBarcode, type BarcodeBeverageProduct } from '@/shared/lib/telegram'
+import { Camera, Check, Flashlight, FlashlightOff, LoaderCircle, ScanLine, Search, X } from 'lucide-react'
+import { haptic, lookupBeverageBarcode } from '@/shared/lib/telegram'
 import { useTranslation } from '@/shared/lib/i18n'
 
 interface Props {
   open: boolean
   onClose: () => void
-  onAdd: (amount: number, beverage: BeverageEntryDetails) => void
+  onAdd: (amount: number) => void
 }
 
-type ScannerStep = 'start' | 'camera' | 'loading' | 'review' | 'not-found' | 'error'
+type ScannerStep = 'start' | 'camera' | 'loading' | 'added' | 'not-found' | 'error'
+type TorchCapabilities = { torch?: boolean }
 
 const initialBarcode = ''
 
@@ -19,28 +19,39 @@ export function BeverageScannerSheet({ open, onClose, onAdd }: Props) {
   const { language } = useTranslation()
   const [step, setStep] = useState<ScannerStep>('start')
   const [barcode, setBarcode] = useState(initialBarcode)
-  const [product, setProduct] = useState<BarcodeBeverageProduct | null>(null)
-  const [serving, setServing] = useState('250')
+  const [amountAdded, setAmountAdded] = useState(0)
   const [cameraError, setCameraError] = useState('')
+  const [torchSupported, setTorchSupported] = useState(false)
+  const [torchOn, setTorchOn] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const torchTrackRef = useRef<MediaStreamTrack | null>(null)
 
   const copy = language === 'ru'
     ? {
-        eyebrow: 'Умное добавление', title: 'Сканировать напиток', camera: 'Открыть камеру', cameraHint: 'Наведите камеру на штрихкод бутылки.', manual: 'Или введите штрихкод вручную', search: 'Найти напиток', unsupported: 'Камера или распознавание штрихкода недоступны в этом устройстве. Введите код вручную.', notFound: 'Напиток не найден', notFoundHint: 'Такого штрихкода нет в открытом каталоге. Попробуйте другой код или добавьте объём вручную.', retry: 'Попробовать ещё раз', review: 'Проверьте напиток', amount: 'Сколько выпито', add: 'Добавить в цель', nutrition: 'Состав на выбранный объём', kcal: 'ккал', sugar: 'сахар', salt: 'соль', sodium: 'натрий', caffeine: 'кофеин', facts: 'Данные берутся с этикетки продукта. Проверьте объём перед добавлением.', close: 'Закрыть', manualAdd: 'Добавить без состава', cameraPermission: 'Не удалось включить камеру. Разрешите доступ к камере и попробуйте снова.', unavailable: 'Сервис временно недоступен. Попробуйте позднее или добавьте объём вручную.', auth: 'Откройте сканер внутри Telegram, чтобы найти продукт.', ml: 'мл', brandFallback: 'Напиток',
+        eyebrow: 'Умное добавление', title: 'Сканировать бутылку', camera: 'Открыть камеру', cameraHint: 'Наведите камеру на штрихкод бутылки.', manual: 'Или введите штрихкод вручную', search: 'Найти объём', unsupported: 'Неверный штрихкод. Введите от 8 до 14 цифр.', notFound: 'Объём не найден', notFoundHint: 'Для этой бутылки не указан объём. Добавьте воду вручную на главном экране.', retry: 'Попробовать ещё раз', close: 'Закрыть', cameraPermission: 'Не удалось включить камеру. Разрешите доступ к камере и попробуйте снова.', unavailable: 'Сервис временно недоступен. Попробуйте позднее.', auth: 'Откройте сканер внутри Telegram.', ml: 'мл', added: 'Добавлено', finding: 'Определяем объём бутылки…', torchOn: 'Выключить фонарик', torchOff: 'Включить фонарик',
       }
     : {
-        eyebrow: 'Smart add', title: 'Scan a drink', camera: 'Open camera', cameraHint: 'Point the camera at the barcode on a bottle.', manual: 'Or enter a barcode manually', search: 'Find drink', unsupported: 'Camera or barcode detection is unavailable on this device. Enter the code manually.', notFound: 'Drink not found', notFoundHint: 'This barcode is not in the open catalogue. Try another code or add the amount manually.', retry: 'Try again', review: 'Review your drink', amount: 'How much did you drink?', add: 'Add to goal', nutrition: 'Nutrition for selected amount', kcal: 'kcal', sugar: 'sugar', salt: 'salt', sodium: 'sodium', caffeine: 'caffeine', facts: 'Values come from the product label. Check the amount before adding.', close: 'Close', manualAdd: 'Add without nutrition', cameraPermission: 'Could not start the camera. Allow camera access and try again.', unavailable: 'Service is temporarily unavailable. Try again later or add the amount manually.', auth: 'Open the scanner inside Telegram to find a product.', ml: 'ml', brandFallback: 'Drink',
+        eyebrow: 'Smart add', title: 'Scan a bottle', camera: 'Open camera', cameraHint: 'Point the camera at the barcode on the bottle.', manual: 'Or enter a barcode manually', search: 'Find volume', unsupported: 'Invalid barcode. Enter 8 to 14 digits.', notFound: 'Volume not found', notFoundHint: 'This bottle has no volume listed. Add water manually from the home screen.', retry: 'Try again', close: 'Close', cameraPermission: 'Could not start the camera. Allow camera access and try again.', unavailable: 'Service is temporarily unavailable. Try again later.', auth: 'Open the scanner inside Telegram.', ml: 'ml', added: 'Added', finding: 'Finding the bottle volume…', torchOn: 'Turn flashlight off', torchOff: 'Turn flashlight on',
       }
 
   const reset = () => {
     setStep('start')
     setBarcode(initialBarcode)
-    setProduct(null)
-    setServing('250')
+    setAmountAdded(0)
     setCameraError('')
+    setTorchSupported(false)
+    setTorchOn(false)
   }
 
   const close = () => { reset(); onClose() }
+
+  const addScannedAmount = (amount: number) => {
+    onAdd(amount)
+    setAmountAdded(amount)
+    setStep('added')
+    haptic.success()
+    window.setTimeout(close, 680)
+  }
 
   const findProduct = async (rawBarcode: string) => {
     const code = rawBarcode.replace(/\D/g, '')
@@ -49,15 +60,26 @@ export function BeverageScannerSheet({ open, onClose, onAdd }: Props) {
     setStep('loading')
     const result = await lookupBeverageBarcode(code)
     if (result.ok) {
-      setProduct(result.product)
-      setServing(String(result.product.volumeMl ?? 250))
-      setStep('review')
-      haptic.success()
+      addScannedAmount(result.product.volumeMl)
       return
     }
     setCameraError(result.reason === 'not_found' ? copy.notFoundHint : result.reason === 'unauthorized' ? copy.auth : copy.unavailable)
     setStep(result.reason === 'not_found' ? 'not-found' : 'error')
     haptic.error()
+  }
+
+  const toggleTorch = async () => {
+    const track = torchTrackRef.current
+    if (!track || !torchSupported) return
+    const nextValue = !torchOn
+    try {
+      await track.applyConstraints({ advanced: [{ torch: nextValue }] } as unknown as MediaTrackConstraints)
+      setTorchOn(nextValue)
+      haptic.tap()
+    } catch {
+      setTorchSupported(false)
+      setTorchOn(false)
+    }
   }
 
   useEffect(() => {
@@ -72,6 +94,17 @@ export function BeverageScannerSheet({ open, onClose, onAdd }: Props) {
     let cancelled = false
     const stop = () => {
       controls?.stop()
+      const stream = video.srcObject instanceof MediaStream ? video.srcObject : null
+      stream?.getTracks().forEach((track) => track.stop())
+      torchTrackRef.current = null
+    }
+    const detectTorch = () => {
+      const stream = video.srcObject instanceof MediaStream ? video.srcObject : null
+      const track = stream?.getVideoTracks()[0]
+      if (!track) return
+      torchTrackRef.current = track
+      const capabilities = (track as unknown as { getCapabilities?: () => TorchCapabilities }).getCapabilities?.()
+      setTorchSupported(capabilities?.torch === true)
     }
     const start = async () => {
       try {
@@ -89,6 +122,7 @@ export function BeverageScannerSheet({ open, onClose, onAdd }: Props) {
             void findProduct(code)
           },
         )
+        if (!cancelled) detectTorch()
       } catch {
         if (cancelled) return
         setCameraError(copy.cameraPermission)
@@ -96,43 +130,10 @@ export function BeverageScannerSheet({ open, onClose, onAdd }: Props) {
       }
     }
     void start()
-    return () => { cancelled = true; stop() }
-  }, [copy.cameraPermission, copy.unsupported, open, step])
+    return () => { cancelled = true; stop(); setTorchSupported(false); setTorchOn(false) }
+  }, [copy.cameraPermission, open, step])
 
   useEffect(() => { if (!open) reset() }, [open])
-
-  const addProduct = () => {
-    if (!product) return
-    const amount = Math.max(1, Math.min(5000, Math.round(Number(serving))))
-    if (!Number.isFinite(amount)) { haptic.error(); return }
-    const multiplier = amount / 100
-    const value = (item: number | undefined) => item === undefined ? undefined : Math.round(item * multiplier * 100) / 100
-    onAdd(amount, {
-      productName: product.name,
-      ...(product.brand ? { brand: product.brand } : {}),
-      barcode: product.barcode,
-      ...(product.imageUrl ? { imageUrl: product.imageUrl } : {}),
-      nutrition: {
-        ...(value(product.nutritionPer100ml.caloriesKcal) !== undefined ? { caloriesKcal: value(product.nutritionPer100ml.caloriesKcal) } : {}),
-        ...(value(product.nutritionPer100ml.sugarsG) !== undefined ? { sugarsG: value(product.nutritionPer100ml.sugarsG) } : {}),
-        ...(value(product.nutritionPer100ml.saltG) !== undefined ? { saltG: value(product.nutritionPer100ml.saltG) } : {}),
-        ...(value(product.nutritionPer100ml.sodiumMg) !== undefined ? { sodiumMg: value(product.nutritionPer100ml.sodiumMg) } : {}),
-        ...(value(product.nutritionPer100ml.caffeineMg) !== undefined ? { caffeineMg: value(product.nutritionPer100ml.caffeineMg) } : {}),
-      },
-    })
-    haptic.success()
-    window.setTimeout(close, 280)
-  }
-
-  const manualAmount = () => {
-    const amount = Math.max(1, Math.min(5000, Math.round(Number(serving))))
-    if (!Number.isFinite(amount)) { haptic.error(); return }
-    onAdd(amount, { productName: copy.brandFallback, nutrition: {} })
-    haptic.success()
-    window.setTimeout(close, 280)
-  }
-
-  const nutrient = (value: number | undefined, label: string, suffix: string) => <div><span>{label}</span><b>{value === undefined ? '—' : `${value.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US', { maximumFractionDigits: 1 })} ${suffix}`}</b></div>
 
   return <AnimatePresence>
     {open && <>
@@ -144,15 +145,10 @@ export function BeverageScannerSheet({ open, onClose, onAdd }: Props) {
           <button type="button" className="beverage-camera-button" onClick={() => { haptic.tap(); setStep('camera') }}><span><Camera size={23}/></span><div><b>{copy.camera}</b><small>{copy.cameraHint}</small></div><ScanLine size={20}/></button>
           <form className="beverage-manual-form" onSubmit={(event) => { event.preventDefault(); void findProduct(barcode) }}><label>{copy.manual}<input value={barcode} onChange={(event) => setBarcode(event.target.value.replace(/\D/g, '').slice(0, 14))} inputMode="numeric" placeholder="4820000000000"/></label><button type="submit" disabled={!/^\d{8,14}$/.test(barcode)}><Search size={17}/>{copy.search}</button></form>
         </div>}
-        {step === 'camera' && <div className="beverage-camera-view"><video ref={videoRef} muted playsInline/><div><ScanLine size={32}/><span>{copy.cameraHint}</span></div></div>}
-        {step === 'loading' && <div className="beverage-scanner-status"><LoaderCircle className="is-refreshing" size={30}/><p>{language === 'ru' ? 'Ищем напиток…' : 'Looking up drink…'}</p></div>}
-        {(step === 'not-found' || step === 'error') && <div className="beverage-scanner-status beverage-scanner-error"><Search size={28}/><b>{step === 'not-found' ? copy.notFound : language === 'ru' ? 'Не удалось найти напиток' : 'Could not find drink'}</b><p>{cameraError}</p><div><button type="button" className="secondary-action" onClick={() => setStep('start')}>{copy.retry}</button><button type="button" className="primary-action" onClick={manualAmount}>{copy.manualAdd}</button></div></div>}
-        {step === 'review' && product && <div className="beverage-review">
-          <div className="beverage-product-card">{product.imageUrl ? <img src={product.imageUrl} alt=""/> : <span><ScanLine size={24}/></span>}<div><p>{product.brand || copy.brandFallback}</p><b>{product.name}</b><small>{product.volumeMl ? `${product.volumeMl} ${copy.ml}` : product.barcode}</small></div><Check size={18}/></div>
-          <label className="beverage-serving-field"><span>{copy.amount}</span><div><input value={serving} onChange={(event) => setServing(event.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric"/><b>{copy.ml}</b></div></label>
-          <section className="beverage-nutrition"><p>{copy.nutrition}</p><div>{nutrient(product.nutritionPer100ml.caloriesKcal === undefined ? undefined : product.nutritionPer100ml.caloriesKcal * (Number(serving) || 0) / 100, copy.kcal, copy.kcal)}{nutrient(product.nutritionPer100ml.sugarsG === undefined ? undefined : product.nutritionPer100ml.sugarsG * (Number(serving) || 0) / 100, copy.sugar, 'g')}{nutrient(product.nutritionPer100ml.saltG === undefined ? undefined : product.nutritionPer100ml.saltG * (Number(serving) || 0) / 100, copy.salt, 'g')}{nutrient(product.nutritionPer100ml.caffeineMg === undefined ? undefined : product.nutritionPer100ml.caffeineMg * (Number(serving) || 0) / 100, copy.caffeine, 'mg')}</div></section>
-          <p className="beverage-facts">{copy.facts}</p><button type="button" className="primary-action beverage-confirm" onClick={addProduct} disabled={!Number(serving)}>{copy.add}</button>
-        </div>}
+        {step === 'camera' && <div className="beverage-camera-view"><video ref={videoRef} muted playsInline/><div className="beverage-camera-overlay"><ScanLine size={32}/><span>{copy.cameraHint}</span></div>{torchSupported && <button type="button" className={`beverage-camera-torch${torchOn ? ' is-active' : ''}`} onClick={() => void toggleTorch()} aria-label={torchOn ? copy.torchOn : copy.torchOff}>{torchOn ? <FlashlightOff size={20}/> : <Flashlight size={20}/>}</button>}</div>}
+        {step === 'loading' && <div className="beverage-scanner-status"><LoaderCircle className="is-refreshing" size={30}/><p>{copy.finding}</p></div>}
+        {step === 'added' && <div className="beverage-scanner-status beverage-scanner-added"><Check size={31}/><b>{copy.added} {amountAdded} {copy.ml}</b></div>}
+        {(step === 'not-found' || step === 'error') && <div className="beverage-scanner-status beverage-scanner-error"><Search size={28}/><b>{step === 'not-found' ? copy.notFound : language === 'ru' ? 'Не удалось определить объём' : 'Could not find the volume'}</b><p>{cameraError}</p><div><button type="button" className="secondary-action" onClick={() => setStep('start')}>{copy.retry}</button></div></div>}
       </motion.section>
     </>}
   </AnimatePresence>
